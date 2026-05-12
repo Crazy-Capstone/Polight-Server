@@ -1,3 +1,21 @@
 spring:
   application:
     name: Polight-Server
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/polight
+    username: polight
+    password: polight
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+
+  docker:
+    compose:
+      enabled: false
