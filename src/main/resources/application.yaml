@@ -19,3 +19,8 @@ spring:
   docker:
     compose:
       enabled: false
+
+security:
+  jwt:
+    secret: "change-this-to-at-least-32-bytes-secret-key"
+    access-token-expiry-seconds: 3600
