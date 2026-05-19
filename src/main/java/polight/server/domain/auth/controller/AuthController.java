@@ -20,6 +20,6 @@ public class AuthController {
 
   @PostMapping("/kakao/login")
   public ResponseEntity<AuthTokenResponse> kakaoLogin(@Valid @RequestBody KakaoLoginRequest request) {
-    return ResponseEntity.ok(authService.loginWithKakao(request.email(), request.name()));
+    return ResponseEntity.ok(authService.loginWithKakao(request.authorizationCode()));
   }
 }
