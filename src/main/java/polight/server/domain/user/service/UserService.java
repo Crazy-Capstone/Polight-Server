@@ -13,17 +13,22 @@ public class UserService {
   private final UserRepository userRepository;
 
   @Transactional
-  public User findOrCreateKakaoUser(String email, String name) {
+  public User findOrCreateKakaoUser(String providerId, String email, String name) {
     return userRepository
-        .findByEmail(email)
+        .findByProviderAndProviderId(User.Provider.KAKAO, providerId)
         .map(
             existingUser -> {
-              existingUser.updateName(name);
+              existingUser.updateProfile(email, name);
               return existingUser;
             })
         .orElseGet(
             () ->
                 userRepository.save(
-                    User.builder().email(email).name(name).provider(User.Provider.KAKAO).build()));
+                    User.builder()
+                        .provider(User.Provider.KAKAO)
+                        .providerId(providerId)
+                        .email(email)
+                        .name(name)
+                        .build()));
   }
 }
