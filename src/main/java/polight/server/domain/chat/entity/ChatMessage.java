@@ -8,39 +8,54 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import polight.server.domain.common.entity.BaseTimeEntity;
-import polight.server.domain.user.entity.User;
 
 @Getter
 @Entity
 @Table(name = "chat_messages")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class ChatMessage extends BaseTimeEntity {
+public class ChatMessage {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "user_id", nullable = false)
-  private User user;
+  @JoinColumn(name = "session_id", nullable = false)
+  private ChatSession session;
+
+  @Column(nullable = false, length = 20)
+  private String role;
 
   @Column(nullable = false, columnDefinition = "TEXT")
-  private String question;
+  private String content;
 
-  @Column(nullable = false, columnDefinition = "TEXT")
-  private String answer;
+  @Column(name = "incident_type", length = 50)
+  private String incidentType;
+
+  @Column(name = "sent_at", nullable = false)
+  private LocalDateTime sentAt;
 
   @Builder
-  public ChatMessage(User user, String question, String answer) {
-    this.user = user;
-    this.question = question;
-    this.answer = answer;
+  public ChatMessage(ChatSession session, String role, String content, String incidentType, LocalDateTime sentAt) {
+    this.session = session;
+    this.role = role;
+    this.content = content;
+    this.incidentType = incidentType;
+    this.sentAt = sentAt;
+  }
+
+  @PrePersist
+  void prePersist() {
+    if (sentAt == null) {
+      sentAt = LocalDateTime.now();
+    }
   }
 }

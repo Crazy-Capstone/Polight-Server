@@ -7,5 +7,5 @@ import polight.server.domain.chat.entity.ChatMessage;
 
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> {
 
-  List<ChatMessage> findByUserIdOrderByCreatedAtDesc(UUID userId);
+  List<ChatMessage> findBySessionUserIdOrderBySentAtDesc(UUID userId);
 }

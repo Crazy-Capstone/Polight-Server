@@ -27,7 +27,15 @@ public class SecurityConfig {
             auth ->
                 auth
                     .requestMatchers(
-                        "/", "/kakao-login-test.html", "/auth/login/kakao", "/favicon.ico", "/api/auth/**")
+                        "/",
+                        "/kakao-login-test.html",
+                        "/auth/login/kakao",
+                        "/favicon.ico",
+                        "/swagger-ui.html",
+                        "/swagger-ui/**",
+                        "/v3/api-docs/**",
+                        "/v3/api-docs.yaml",
+                        "/api/auth/**")
                     .permitAll()
                     .anyRequest()
                     .authenticated())
