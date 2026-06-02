@@ -24,7 +24,13 @@ public class SecurityConfig {
         .formLogin(form -> form.disable())
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
-            auth -> auth.requestMatchers("/api/auth/**").permitAll().anyRequest().authenticated())
+            auth ->
+                auth
+                    .requestMatchers(
+                        "/", "/kakao-login-test.html", "/auth/login/kakao", "/favicon.ico", "/api/auth/**")
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated())
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
     return http.build();
