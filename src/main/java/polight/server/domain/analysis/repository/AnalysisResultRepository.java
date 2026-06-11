@@ -8,4 +8,6 @@ import polight.server.domain.analysis.entity.AnalysisResult;
 public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, UUID> {
 
   List<AnalysisResult> findByDocumentId(UUID documentId);
+
+  List<AnalysisResult> findByPolicyId(UUID policyId);
 }

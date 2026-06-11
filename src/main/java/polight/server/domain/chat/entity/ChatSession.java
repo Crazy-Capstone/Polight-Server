@@ -2,10 +2,13 @@ package polight.server.domain.chat.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
@@ -17,14 +20,23 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import polight.server.domain.insurance.entity.InsuranceDocument;
+import polight.server.domain.common.entity.BaseTimeEntity;
+import polight.server.domain.policy.entity.Policy;
+import polight.server.domain.trip.entity.Trip;
 import polight.server.domain.user.entity.User;
 
 @Getter
 @Entity
-@Table(name = "chat_sessions")
+@Table(
+    name = "chat_sessions",
+    indexes = {
+      @Index(name = "idx_chat_sessions_user_id", columnList = "user_id"),
+      @Index(name = "idx_chat_sessions_trip_id", columnList = "trip_id"),
+      @Index(name = "idx_chat_sessions_policy_id", columnList = "policy_id"),
+      @Index(name = "idx_chat_sessions_user_status", columnList = "user_id,status")
+    })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class ChatSession {
+public class ChatSession extends BaseTimeEntity {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
@@ -35,8 +47,19 @@ public class ChatSession {
   private User user;
 
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "document_id")
-  private InsuranceDocument document;
+  @JoinColumn(name = "trip_id")
+  private Trip trip;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "policy_id")
+  private Policy policy;
+
+  @Column(nullable = false, length = 100)
+  private String title;
+
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 20)
+  private ChatSessionStatus status = ChatSessionStatus.OPEN;
 
   @Column(name = "started_at", nullable = false)
   private LocalDateTime startedAt;
@@ -45,9 +68,19 @@ public class ChatSession {
   private LocalDateTime lastActiveAt;
 
   @Builder
-  public ChatSession(User user, InsuranceDocument document, LocalDateTime startedAt, LocalDateTime lastActiveAt) {
+  public ChatSession(
+      User user,
+      Trip trip,
+      Policy policy,
+      String title,
+      ChatSessionStatus status,
+      LocalDateTime startedAt,
+      LocalDateTime lastActiveAt) {
     this.user = user;
-    this.document = document;
+    this.trip = trip;
+    this.policy = policy;
+    this.title = title;
+    this.status = status == null ? ChatSessionStatus.OPEN : status;
     this.startedAt = startedAt;
     this.lastActiveAt = lastActiveAt;
   }
