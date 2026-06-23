@@ -1,4 +1,7 @@
 spring:
+  config:
+    import: optional:file:.env[.properties]
+
   application:
     name: Polight-Server
 
@@ -24,3 +27,10 @@ security:
   jwt:
     secret: "change-this-to-at-least-32-bytes-secret-key"
     access-token-expiry-seconds: 3600
+
+
+oauth:
+  kakao:
+    client-id: ${KAKAO_REST_API_KEY}
+    redirect-uri: ${KAKAO_REDIRECT_URI}
+    client-secret: ${KAKAO_CLIENT_SECRET:}
