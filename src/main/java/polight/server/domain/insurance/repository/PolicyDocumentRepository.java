@@ -1,6 +1,7 @@
 package polight.server.domain.insurance.repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import polight.server.domain.insurance.entity.PolicyDocument;
@@ -10,4 +11,6 @@ public interface PolicyDocumentRepository extends JpaRepository<PolicyDocument, 
   List<PolicyDocument> findByUserId(UUID userId);
 
   List<PolicyDocument> findByPolicyId(UUID policyId);
+
+  Optional<PolicyDocument> findByIdAndUserId(UUID id, UUID userId);
 }

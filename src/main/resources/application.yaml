@@ -23,6 +23,16 @@ spring:
     compose:
       enabled: false
 
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
+
+polight:
+  file-storage:
+    directory: ${POLIGHT_FILE_STORAGE_DIR:./data/policy-documents}
+    max-size-bytes: ${POLIGHT_FILE_MAX_SIZE:10485760}
+
 security:
   jwt:
     secret: "change-this-to-at-least-32-bytes-secret-key"

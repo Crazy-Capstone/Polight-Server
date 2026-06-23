@@ -104,4 +104,13 @@ public class User extends BaseTimeEntity {
     this.nationalityCode = nationalityCode;
     this.avatarEmoji = avatarEmoji;
   }
+
+  public void updatePublicProfile(
+      String name, String phone, String avatarEmoji, String passportName, String nationalityCode) {
+    if (name != null) this.name = name;
+    if (phone != null) this.phone = phone;
+    if (avatarEmoji != null) this.avatarEmoji = avatarEmoji;
+    if (passportName != null) this.passportName = passportName;
+    if (nationalityCode != null) this.nationalityCode = nationalityCode;
+  }
 }

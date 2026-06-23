@@ -100,4 +100,8 @@ public class PolicyDocument extends BaseTimeEntity {
       uploadedAt = LocalDateTime.now();
     }
   }
+
+  public void markProcessing() {
+    this.parseStatus = DocumentParseStatus.PROCESSING;
+  }
 }

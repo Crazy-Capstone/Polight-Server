@@ -57,4 +57,15 @@ public class NotificationPreference extends BaseTimeEntity {
     this.analysisDoneEnabled = analysisDoneEnabled == null || analysisDoneEnabled;
     this.pushEnabled = pushEnabled == null || pushEnabled;
   }
+
+  public void update(
+      Boolean policyExpiryEnabled,
+      Boolean renewalEnabled,
+      Boolean analysisDoneEnabled,
+      Boolean pushEnabled) {
+    if (policyExpiryEnabled != null) this.policyExpiryEnabled = policyExpiryEnabled;
+    if (renewalEnabled != null) this.renewalEnabled = renewalEnabled;
+    if (analysisDoneEnabled != null) this.analysisDoneEnabled = analysisDoneEnabled;
+    if (pushEnabled != null) this.pushEnabled = pushEnabled;
+  }
 }
