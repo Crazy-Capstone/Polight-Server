@@ -24,8 +24,6 @@ public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, 
           WHERE document_id = :documentId
             AND is_active = true
             AND status = 'COMPLETED'
-          ORDER BY completed_at DESC
-          LIMIT 1
           """,
       nativeQuery = true)
   Optional<AnalysisResult> findActiveCompletedByDocumentId(@Param("documentId") UUID documentId);
@@ -39,8 +37,6 @@ public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, 
           WHERE policy_id = :policyId
             AND is_active = true
             AND status = 'COMPLETED'
-          ORDER BY completed_at DESC
-          LIMIT 1
           """,
       nativeQuery = true)
   Optional<AnalysisResult> findActiveCompletedByPolicyId(@Param("policyId") UUID policyId);
