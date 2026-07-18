@@ -12,6 +12,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -26,7 +27,9 @@ import polight.server.domain.policy.entity.Policy;
     name = "coverage_items",
     indexes = {
       @Index(name = "idx_coverage_items_policy_id", columnList = "policy_id"),
-      @Index(name = "idx_coverage_items_policy_sort", columnList = "policy_id,sort_order")
+      @Index(name = "idx_coverage_items_policy_sort", columnList = "policy_id,sort_order"),
+      @Index(name = "idx_coverage_items_analysis_result_id", columnList = "analysis_result_id"),
+      @Index(name = "idx_coverage_items_analysis_sort", columnList = "analysis_result_id,sort_order")
     })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CoverageItem extends BaseTimeEntity {
@@ -39,8 +42,8 @@ public class CoverageItem extends BaseTimeEntity {
   @JoinColumn(name = "policy_id", nullable = false)
   private Policy policy;
 
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "analysis_result_id")
+  @ManyToOne(fetch = FetchType.LAZY, optional = false)
+  @JoinColumn(name = "analysis_result_id", nullable = false)
   private AnalysisResult analysisResult;
 
   @Column(length = 10)
@@ -92,8 +95,8 @@ public class CoverageItem extends BaseTimeEntity {
       String limitCurrency,
       String conditions,
       Integer sortOrder) {
-    this.policy = policy;
-    this.analysisResult = analysisResult;
+    this.policy = Objects.requireNonNull(policy, "policy는 필수입니다.");
+    this.analysisResult = Objects.requireNonNull(analysisResult, "analysisResult는 필수입니다.");
     this.emoji = emoji;
     this.title = title;
     this.subtitle = subtitle;
