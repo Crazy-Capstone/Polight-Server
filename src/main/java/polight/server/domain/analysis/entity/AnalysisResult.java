@@ -20,7 +20,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import polight.server.domain.common.entity.BaseTimeEntity;
-import polight.server.domain.insurance.entity.DocumentParseStatus;
 import polight.server.domain.insurance.entity.PolicyDocument;
 import polight.server.domain.policy.entity.Policy;
 
@@ -31,10 +30,14 @@ import polight.server.domain.policy.entity.Policy;
     indexes = {
       @Index(name = "idx_analysis_results_document_id", columnList = "document_id"),
       @Index(name = "idx_analysis_results_policy_id", columnList = "policy_id"),
-      @Index(name = "idx_analysis_results_parse_status", columnList = "parse_status")
+      @Index(name = "idx_analysis_results_status", columnList = "status"),
+      @Index(name = "idx_analysis_results_document_active", columnList = "document_id,is_active,status"),
+      @Index(name = "idx_analysis_results_policy_active", columnList = "policy_id,is_active,status")
     })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AnalysisResult extends BaseTimeEntity {
+
+  private static final String DEFAULT_ANALYSIS_VERSION = "v1";
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
@@ -58,13 +61,34 @@ public class AnalysisResult extends BaseTimeEntity {
   private Float accuracyScore;
 
   @Enumerated(EnumType.STRING)
-  @Column(name = "parse_status", nullable = false, length = 20)
-  private DocumentParseStatus parseStatus = DocumentParseStatus.PROCESSING;
+  @Column(nullable = false, length = 20)
+  private AnalysisStatus status = AnalysisStatus.PROCESSING;
 
-  @Column(name = "error_message", columnDefinition = "TEXT")
-  private String errorMessage;
+  @Column(name = "analysis_version", nullable = false, length = 50)
+  private String analysisVersion = DEFAULT_ANALYSIS_VERSION;
 
-  @Column(name = "analyzed_at", nullable = false)
+  @Column(name = "chunking_version", length = 50)
+  private String chunkingVersion;
+
+  @Column(name = "embedding_model", length = 100)
+  private String embeddingModel;
+
+  @Column(name = "embedding_dimension")
+  private Integer embeddingDimension;
+
+  @Column(name = "started_at", nullable = false)
+  private LocalDateTime startedAt;
+
+  @Column(name = "completed_at")
+  private LocalDateTime completedAt;
+
+  @Column(name = "failure_reason", columnDefinition = "TEXT")
+  private String failureReason;
+
+  @Column(name = "is_active", nullable = false)
+  private boolean active;
+
+  @Column(name = "analyzed_at")
   private LocalDateTime analyzedAt;
 
   @Builder
@@ -74,23 +98,66 @@ public class AnalysisResult extends BaseTimeEntity {
       String summary,
       String rawResultJson,
       Float accuracyScore,
-      DocumentParseStatus parseStatus,
-      String errorMessage,
+      AnalysisStatus status,
+      String analysisVersion,
+      String chunkingVersion,
+      String embeddingModel,
+      Integer embeddingDimension,
+      LocalDateTime startedAt,
+      LocalDateTime completedAt,
+      String failureReason,
+      boolean active,
       LocalDateTime analyzedAt) {
     this.document = document;
     this.policy = policy;
     this.summary = summary;
     this.rawResultJson = rawResultJson;
     this.accuracyScore = accuracyScore;
-    this.parseStatus = parseStatus == null ? DocumentParseStatus.PROCESSING : parseStatus;
-    this.errorMessage = errorMessage;
+    this.status = status == null ? AnalysisStatus.PROCESSING : status;
+    this.analysisVersion =
+        analysisVersion == null || analysisVersion.isBlank() ? DEFAULT_ANALYSIS_VERSION : analysisVersion;
+    this.chunkingVersion = chunkingVersion;
+    this.embeddingModel = embeddingModel;
+    this.embeddingDimension = embeddingDimension;
+    this.startedAt = startedAt;
+    this.completedAt = completedAt;
+    this.failureReason = failureReason;
+    this.active = active;
     this.analyzedAt = analyzedAt;
+  }
+
+  public void markCompleted(LocalDateTime completedAt) {
+    this.status = AnalysisStatus.COMPLETED;
+    this.completedAt = completedAt == null ? LocalDateTime.now() : completedAt;
+    this.analyzedAt = this.completedAt;
+    this.failureReason = null;
+  }
+
+  public void markFailed(String failureReason, LocalDateTime completedAt) {
+    this.status = AnalysisStatus.FAILED;
+    this.completedAt = completedAt == null ? LocalDateTime.now() : completedAt;
+    this.failureReason = failureReason;
+    this.active = false;
+  }
+
+  public void activate() {
+    if (status != AnalysisStatus.COMPLETED) {
+      throw new IllegalStateException("완료된 분석 결과만 활성화할 수 있습니다.");
+    }
+    this.active = true;
+  }
+
+  public void deactivate() {
+    this.active = false;
   }
 
   @PrePersist
   void prePersist() {
+    if (startedAt == null) {
+      startedAt = LocalDateTime.now();
+    }
     if (analyzedAt == null) {
-      analyzedAt = LocalDateTime.now();
+      analyzedAt = completedAt;
     }
   }
 }
