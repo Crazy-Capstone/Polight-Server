@@ -17,27 +17,23 @@ public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, 
   List<AnalysisResult> findByDocumentIdOrderByCreatedAtDesc(UUID documentId);
 
   @Query(
-      value =
-          """
-          SELECT *
-          FROM analysis_results
-          WHERE document_id = :documentId
-            AND is_active = true
-            AND status = 'COMPLETED'
-          """,
-      nativeQuery = true)
+      """
+      SELECT ar
+      FROM AnalysisResult ar
+      WHERE ar.document.id = :documentId
+        AND ar.active = true
+        AND ar.status = polight.server.domain.analysis.entity.AnalysisStatus.COMPLETED
+      """)
   Optional<AnalysisResult> findActiveCompletedByDocumentId(@Param("documentId") UUID documentId);
 
   // 같은 보험이여도 여러번 분석될 수 있음 , 그 분석된 버전을 관리함
   @Query(
-      value =
-          """
-          SELECT *
-          FROM analysis_results
-          WHERE policy_id = :policyId
-            AND is_active = true
-            AND status = 'COMPLETED'
-          """,
-      nativeQuery = true)
+      """
+      SELECT ar
+      FROM AnalysisResult ar
+      WHERE ar.policy.id = :policyId
+        AND ar.active = true
+        AND ar.status = polight.server.domain.analysis.entity.AnalysisStatus.COMPLETED
+      """)
   Optional<AnalysisResult> findActiveCompletedByPolicyId(@Param("policyId") UUID policyId);
 }
