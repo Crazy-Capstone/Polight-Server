@@ -29,11 +29,7 @@ import polight.server.domain.common.entity.BaseTimeEntity;
         @UniqueConstraint(
             name = "uk_policy_chunks_analysis_chunk_index",
             columnNames = {"analysis_result_id", "chunk_index"}),
-    indexes = {
-      @Index(name = "idx_policy_chunks_analysis_result_id", columnList = "analysis_result_id"),
-      @Index(name = "idx_policy_chunks_analysis_chunk_index", columnList = "analysis_result_id,chunk_index"),
-      @Index(name = "idx_policy_chunks_coverage_category", columnList = "coverage_category")
-    })
+    indexes = @Index(name = "idx_policy_chunks_coverage_category", columnList = "coverage_category"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PolicyChunk extends BaseTimeEntity {
 
