@@ -19,6 +19,9 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Array;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import polight.server.domain.analysis.entity.AnalysisResult;
 import polight.server.domain.common.entity.BaseTimeEntity;
 
@@ -33,6 +36,8 @@ import polight.server.domain.common.entity.BaseTimeEntity;
     indexes = @Index(name = "idx_policy_chunks_coverage_category", columnList = "coverage_category"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PolicyChunk extends BaseTimeEntity {
+
+  public static final int EMBEDDING_DIMENSION = 1536;
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
@@ -73,8 +78,10 @@ public class PolicyChunk extends BaseTimeEntity {
   @Column(columnDefinition = "TEXT")
   private String summary;
 
-  @Column(name = "embedding", columnDefinition = "TEXT")
-  private String embedding;
+  @JdbcTypeCode(SqlTypes.VECTOR)
+  @Array(length = EMBEDDING_DIMENSION)
+  @Column(name = "embedding", columnDefinition = "vector(1536)")
+  private float[] embedding;
 
   @Column(name = "char_count", nullable = false)
   private int charCount;
@@ -92,7 +99,7 @@ public class PolicyChunk extends BaseTimeEntity {
       String coverageType,
       String content,
       String summary,
-      String embedding,
+      float[] embedding,
       Integer charCount) {
     this.analysisResult = Objects.requireNonNull(analysisResult, "analysisResult는 필수입니다.");
     this.chunkIndex = Objects.requireNonNull(chunkIndex, "chunkIndex는 필수입니다.");
