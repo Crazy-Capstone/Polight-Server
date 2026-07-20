@@ -1,10 +1,10 @@
-package polight.server.domain.analysis.repository;
+package polight.server.domain.rag.repository;
 
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import polight.server.domain.analysis.entity.CoverageItemSource;
-import polight.server.domain.analysis.entity.CoverageItemSourceRole;
+import polight.server.domain.rag.entity.CoverageItemSource;
+import polight.server.domain.rag.entity.CoverageItemSourceRole;
 
 public interface CoverageItemSourceRepository extends JpaRepository<CoverageItemSource, UUID> {
 

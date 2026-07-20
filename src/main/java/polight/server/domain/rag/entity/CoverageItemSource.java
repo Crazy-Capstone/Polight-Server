@@ -1,4 +1,4 @@
-package polight.server.domain.analysis.entity;
+package polight.server.domain.rag.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,6 +19,8 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import polight.server.domain.analysis.entity.AnalysisResult;
+import polight.server.domain.analysis.entity.CoverageItem;
 import polight.server.domain.common.entity.BaseTimeEntity;
 
 @Getter
