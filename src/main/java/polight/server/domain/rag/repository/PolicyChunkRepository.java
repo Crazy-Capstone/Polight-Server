@@ -14,6 +14,7 @@ public interface PolicyChunkRepository extends JpaRepository<PolicyChunk, UUID> 
 
   Optional<PolicyChunk> findByAnalysisResultIdAndChunkIndex(UUID analysisResultId, int chunkIndex);
 
+  //TODO : 쿼리 검토 필요
   @Query(
       """
       SELECT pc
