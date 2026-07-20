@@ -1,4 +1,4 @@
-package polight.server.domain.analysis.entity;
+package polight.server.domain.rag.entity;
 
 public enum PolicyChunkContentType {
   TEXT,
