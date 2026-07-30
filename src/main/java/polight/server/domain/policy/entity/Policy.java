@@ -28,9 +28,7 @@ import polight.server.domain.user.entity.User;
     name = "policies",
     indexes = {
       @Index(name = "idx_policies_user_id", columnList = "user_id"),
-      @Index(name = "idx_policies_trip_id", columnList = "trip_id"),
-      @Index(name = "idx_policies_user_status", columnList = "user_id,status"),
-      @Index(name = "idx_policies_user_dates", columnList = "user_id,start_date,end_date")
+      @Index(name = "idx_policies_trip_id", columnList = "trip_id")
     })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Policy extends BaseTimeEntity {

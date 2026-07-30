@@ -25,10 +25,7 @@ import polight.server.domain.user.entity.User;
 @Entity
 @Table(
     name = "notifications",
-    indexes = {
-      @Index(name = "idx_notifications_user_read", columnList = "user_id,read_at"),
-      @Index(name = "idx_notifications_user_created", columnList = "user_id,created_at")
-    })
+    indexes = @Index(name = "idx_notifications_user_created", columnList = "user_id,created_at"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Notification extends BaseTimeEntity {
 

@@ -24,10 +24,7 @@ import polight.server.domain.common.entity.BaseTimeEntity;
 @Entity
 @Table(
     name = "exclusion_conditions",
-    indexes = {
-      @Index(name = "idx_exclusion_conditions_coverage_sort", columnList = "coverage_item_id,sort_order"),
-      @Index(name = "idx_exclusion_conditions_severity", columnList = "severity")
-    })
+    indexes = @Index(name = "idx_exclusion_conditions_coverage_sort", columnList = "coverage_item_id,sort_order"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ExclusionCondition extends BaseTimeEntity {
 

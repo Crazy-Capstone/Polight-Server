@@ -40,8 +40,7 @@ import polight.server.domain.user.entity.User;
     indexes = {
       @Index(name = "idx_policy_chunks_user_trip", columnList = "user_id,trip_id"),
       @Index(name = "idx_policy_chunks_user_policy", columnList = "user_id,policy_id"),
-      @Index(name = "idx_policy_chunks_user_document", columnList = "user_id,document_id"),
-      @Index(name = "idx_policy_chunks_coverage_category", columnList = "coverage_category")
+      @Index(name = "idx_policy_chunks_user_document", columnList = "user_id,document_id")
     })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PolicyChunk extends BaseTimeEntity {
