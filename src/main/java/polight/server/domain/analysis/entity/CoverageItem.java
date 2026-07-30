@@ -38,9 +38,6 @@ public class CoverageItem extends BaseTimeEntity {
   @JoinColumn(name = "analysis_result_id", nullable = false)
   private AnalysisResult analysisResult;
 
-  @Column(length = 10)
-  private String emoji;
-
   @Column(nullable = false, length = 200)
   private String title;
 
@@ -75,7 +72,6 @@ public class CoverageItem extends BaseTimeEntity {
   @Builder
   public CoverageItem(
       AnalysisResult analysisResult,
-      String emoji,
       String title,
       String subtitle,
       String category,
@@ -87,7 +83,6 @@ public class CoverageItem extends BaseTimeEntity {
       String conditions,
       Integer sortOrder) {
     this.analysisResult = Objects.requireNonNull(analysisResult, "analysisResult는 필수입니다.");
-    this.emoji = emoji;
     this.title = title;
     this.subtitle = subtitle;
     this.category = category;

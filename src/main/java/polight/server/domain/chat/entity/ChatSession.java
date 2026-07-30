@@ -29,12 +29,7 @@ import polight.server.domain.user.entity.User;
 @Entity
 @Table(
     name = "chat_sessions",
-    indexes = {
-      @Index(name = "idx_chat_sessions_user_id", columnList = "user_id"),
-      @Index(name = "idx_chat_sessions_trip_id", columnList = "trip_id"),
-      @Index(name = "idx_chat_sessions_policy_id", columnList = "policy_id"),
-      @Index(name = "idx_chat_sessions_user_status", columnList = "user_id,status")
-    })
+    indexes = @Index(name = "idx_chat_sessions_user_id", columnList = "user_id"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatSession extends BaseTimeEntity {
 

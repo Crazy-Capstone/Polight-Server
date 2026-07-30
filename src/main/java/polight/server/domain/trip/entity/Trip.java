@@ -8,7 +8,6 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -23,13 +22,7 @@ import polight.server.domain.user.entity.User;
 
 @Getter
 @Entity
-@Table(
-    name = "trips",
-    indexes = {
-      @Index(name = "idx_trips_user_id", columnList = "user_id"),
-      @Index(name = "idx_trips_user_status", columnList = "user_id,status"),
-      @Index(name = "idx_trips_user_dates", columnList = "user_id,start_date,end_date")
-    })
+@Table(name = "trips")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Trip extends BaseTimeEntity {
 
