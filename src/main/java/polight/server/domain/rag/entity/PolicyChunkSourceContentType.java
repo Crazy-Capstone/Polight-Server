@@ -1,6 +1,6 @@
 package polight.server.domain.rag.entity;
 
-public enum PolicyChunkContentType {
+public enum PolicyChunkSourceContentType {
   TEXT,
   TABLE,
   OCR_TEXT,

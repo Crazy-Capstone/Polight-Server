@@ -24,6 +24,10 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import polight.server.domain.analysis.entity.AnalysisResult;
 import polight.server.domain.common.entity.BaseTimeEntity;
+import polight.server.domain.insurance.entity.PolicyDocument;
+import polight.server.domain.policy.entity.Policy;
+import polight.server.domain.trip.entity.Trip;
+import polight.server.domain.user.entity.User;
 
 @Getter
 @Entity
@@ -33,7 +37,12 @@ import polight.server.domain.common.entity.BaseTimeEntity;
         @UniqueConstraint(
             name = "uk_policy_chunks_analysis_chunk_index",
             columnNames = {"analysis_result_id", "chunk_index"}),
-    indexes = @Index(name = "idx_policy_chunks_coverage_category", columnList = "coverage_category"))
+    indexes = {
+      @Index(name = "idx_policy_chunks_user_trip", columnList = "user_id,trip_id"),
+      @Index(name = "idx_policy_chunks_user_policy", columnList = "user_id,policy_id"),
+      @Index(name = "idx_policy_chunks_user_document", columnList = "user_id,document_id"),
+      @Index(name = "idx_policy_chunks_coverage_category", columnList = "coverage_category")
+    })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PolicyChunk extends BaseTimeEntity {
 
@@ -47,12 +56,28 @@ public class PolicyChunk extends BaseTimeEntity {
   @JoinColumn(name = "analysis_result_id", nullable = false)
   private AnalysisResult analysisResult;
 
+  @ManyToOne(fetch = FetchType.LAZY, optional = false)
+  @JoinColumn(name = "user_id", nullable = false)
+  private User user;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "trip_id")
+  private Trip trip;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "policy_id")
+  private Policy policy;
+
+  @ManyToOne(fetch = FetchType.LAZY, optional = false)
+  @JoinColumn(name = "document_id", nullable = false)
+  private PolicyDocument document;
+
   @Column(name = "chunk_index", nullable = false)
   private int chunkIndex;
 
   @Enumerated(EnumType.STRING)
-  @Column(name = "content_type", nullable = false, length = 30)
-  private PolicyChunkContentType contentType = PolicyChunkContentType.TEXT;
+  @Column(name = "source_content_type", nullable = false, length = 30)
+  private PolicyChunkSourceContentType sourceContentType = PolicyChunkSourceContentType.TEXT;
 
   @Column(name = "page_start")
   private Integer pageStart;
@@ -69,8 +94,9 @@ public class PolicyChunk extends BaseTimeEntity {
   @Column(name = "coverage_category", length = 100)
   private String coverageCategory;
 
-  @Column(name = "coverage_type", length = 100)
-  private String coverageType;
+  @Enumerated(EnumType.STRING)
+  @Column(name = "clause_type", nullable = false, length = 30)
+  private PolicyChunkClauseType clauseType = PolicyChunkClauseType.GENERAL;
 
   @Column(nullable = false, columnDefinition = "TEXT")
   private String content;
@@ -90,29 +116,53 @@ public class PolicyChunk extends BaseTimeEntity {
   public PolicyChunk(
       AnalysisResult analysisResult,
       Integer chunkIndex,
-      PolicyChunkContentType contentType,
+      PolicyChunkSourceContentType sourceContentType,
       Integer pageStart,
       Integer pageEnd,
       String sectionTitle,
       String clausePath,
       String coverageCategory,
-      String coverageType,
+      PolicyChunkClauseType clauseType,
       String content,
       String summary,
       float[] embedding,
       Integer charCount) {
     this.analysisResult = Objects.requireNonNull(analysisResult, "analysisResult는 필수입니다.");
+    this.document = Objects.requireNonNull(analysisResult.getDocument(), "analysisResult.document는 필수입니다.");
+    this.user = Objects.requireNonNull(document.getUser(), "document.user는 필수입니다.");
+    this.policy = resolvePolicy(analysisResult);
+    this.trip = resolveTrip(analysisResult, policy);
     this.chunkIndex = Objects.requireNonNull(chunkIndex, "chunkIndex는 필수입니다.");
-    this.contentType = contentType == null ? PolicyChunkContentType.TEXT : contentType;
+    this.sourceContentType = sourceContentType == null ? PolicyChunkSourceContentType.TEXT : sourceContentType;
     this.pageStart = pageStart;
     this.pageEnd = pageEnd;
     this.sectionTitle = sectionTitle;
     this.clausePath = clausePath;
     this.coverageCategory = coverageCategory;
-    this.coverageType = coverageType;
+    this.clauseType = clauseType == null ? PolicyChunkClauseType.GENERAL : clauseType;
     this.content = Objects.requireNonNull(content, "content는 필수입니다.");
     this.summary = summary;
     this.embedding = embedding;
     this.charCount = charCount == null ? content.length() : charCount;
+  }
+
+  private Policy resolvePolicy(AnalysisResult analysisResult) {
+    if (document.getPolicy() != null) {
+      return document.getPolicy();
+    }
+    return analysisResult.getPolicy();
+  }
+
+  private Trip resolveTrip(AnalysisResult analysisResult, Policy resolvedPolicy) {
+    if (document.getTrip() != null) {
+      return document.getTrip();
+    }
+    if (document.getPolicy() != null) {
+      return document.getPolicy().getTrip();
+    }
+    if (resolvedPolicy != null) {
+      return resolvedPolicy.getTrip();
+    }
+    return null;
   }
 }

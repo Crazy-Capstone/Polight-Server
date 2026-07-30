@@ -13,6 +13,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -27,17 +28,13 @@ import polight.server.domain.policy.entity.Policy;
 @Entity
 @Table(
     name = "analysis_results",
+    uniqueConstraints = @UniqueConstraint(name = "uk_analysis_results_document_id", columnNames = "document_id"),
     indexes = {
-      @Index(name = "idx_analysis_results_document_id", columnList = "document_id"),
       @Index(name = "idx_analysis_results_policy_id", columnList = "policy_id"),
-      @Index(name = "idx_analysis_results_status", columnList = "status"),
-      @Index(name = "idx_analysis_results_document_active", columnList = "document_id,is_active,status"),
-      @Index(name = "idx_analysis_results_policy_active", columnList = "policy_id,is_active,status")
+      @Index(name = "idx_analysis_results_status", columnList = "status")
     })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AnalysisResult extends BaseTimeEntity {
-
-  private static final String DEFAULT_ANALYSIS_VERSION = "v1";
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
@@ -64,12 +61,6 @@ public class AnalysisResult extends BaseTimeEntity {
   @Column(nullable = false, length = 20)
   private AnalysisStatus status = AnalysisStatus.PROCESSING;
 
-  @Column(name = "analysis_version", nullable = false, length = 50)
-  private String analysisVersion = DEFAULT_ANALYSIS_VERSION;
-
-  @Column(name = "chunking_version", length = 50)
-  private String chunkingVersion;
-
   @Column(name = "embedding_model", length = 100)
   private String embeddingModel;
 
@@ -85,9 +76,6 @@ public class AnalysisResult extends BaseTimeEntity {
   @Column(name = "failure_reason", columnDefinition = "TEXT")
   private String failureReason;
 
-  @Column(name = "is_active", nullable = false)
-  private boolean active;
-
   @Column(name = "analyzed_at")
   private LocalDateTime analyzedAt;
 
@@ -99,14 +87,11 @@ public class AnalysisResult extends BaseTimeEntity {
       String rawResultJson,
       Float accuracyScore,
       AnalysisStatus status,
-      String analysisVersion,
-      String chunkingVersion,
       String embeddingModel,
       Integer embeddingDimension,
       LocalDateTime startedAt,
       LocalDateTime completedAt,
       String failureReason,
-      boolean active,
       LocalDateTime analyzedAt) {
     this.document = document;
     this.policy = policy;
@@ -114,15 +99,11 @@ public class AnalysisResult extends BaseTimeEntity {
     this.rawResultJson = rawResultJson;
     this.accuracyScore = accuracyScore;
     this.status = status == null ? AnalysisStatus.PROCESSING : status;
-    this.analysisVersion =
-        analysisVersion == null || analysisVersion.isBlank() ? DEFAULT_ANALYSIS_VERSION : analysisVersion;
-    this.chunkingVersion = chunkingVersion;
     this.embeddingModel = embeddingModel;
     this.embeddingDimension = embeddingDimension;
     this.startedAt = startedAt;
     this.completedAt = completedAt;
     this.failureReason = failureReason;
-    this.active = active;
     this.analyzedAt = analyzedAt;
   }
 
@@ -137,18 +118,6 @@ public class AnalysisResult extends BaseTimeEntity {
     this.status = AnalysisStatus.FAILED;
     this.completedAt = completedAt == null ? LocalDateTime.now() : completedAt;
     this.failureReason = failureReason;
-    this.active = false;
-  }
-
-  public void activate() {
-    if (status != AnalysisStatus.COMPLETED) {
-      throw new IllegalStateException("완료된 분석 결과만 활성화할 수 있습니다.");
-    }
-    this.active = true;
-  }
-
-  public void deactivate() {
-    this.active = false;
   }
 
   @PrePersist
