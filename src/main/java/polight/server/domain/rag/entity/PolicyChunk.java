@@ -76,8 +76,8 @@ public class PolicyChunk extends BaseTimeEntity {
   private int chunkIndex;
 
   @Enumerated(EnumType.STRING)
-  @Column(name = "content_type", nullable = false, length = 30)
-  private PolicyChunkContentType contentType = PolicyChunkContentType.TEXT;
+  @Column(name = "source_content_type", nullable = false, length = 30)
+  private PolicyChunkSourceContentType sourceContentType = PolicyChunkSourceContentType.TEXT;
 
   @Column(name = "page_start")
   private Integer pageStart;
@@ -94,8 +94,9 @@ public class PolicyChunk extends BaseTimeEntity {
   @Column(name = "coverage_category", length = 100)
   private String coverageCategory;
 
-  @Column(name = "coverage_type", length = 100)
-  private String coverageType;
+  @Enumerated(EnumType.STRING)
+  @Column(name = "clause_type", nullable = false, length = 30)
+  private PolicyChunkClauseType clauseType = PolicyChunkClauseType.GENERAL;
 
   @Column(nullable = false, columnDefinition = "TEXT")
   private String content;
@@ -115,13 +116,13 @@ public class PolicyChunk extends BaseTimeEntity {
   public PolicyChunk(
       AnalysisResult analysisResult,
       Integer chunkIndex,
-      PolicyChunkContentType contentType,
+      PolicyChunkSourceContentType sourceContentType,
       Integer pageStart,
       Integer pageEnd,
       String sectionTitle,
       String clausePath,
       String coverageCategory,
-      String coverageType,
+      PolicyChunkClauseType clauseType,
       String content,
       String summary,
       float[] embedding,
@@ -132,13 +133,13 @@ public class PolicyChunk extends BaseTimeEntity {
     this.policy = resolvePolicy(analysisResult);
     this.trip = resolveTrip(analysisResult, policy);
     this.chunkIndex = Objects.requireNonNull(chunkIndex, "chunkIndex는 필수입니다.");
-    this.contentType = contentType == null ? PolicyChunkContentType.TEXT : contentType;
+    this.sourceContentType = sourceContentType == null ? PolicyChunkSourceContentType.TEXT : sourceContentType;
     this.pageStart = pageStart;
     this.pageEnd = pageEnd;
     this.sectionTitle = sectionTitle;
     this.clausePath = clausePath;
     this.coverageCategory = coverageCategory;
-    this.coverageType = coverageType;
+    this.clauseType = clauseType == null ? PolicyChunkClauseType.GENERAL : clauseType;
     this.content = Objects.requireNonNull(content, "content는 필수입니다.");
     this.summary = summary;
     this.embedding = embedding;
