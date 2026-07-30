@@ -19,16 +19,12 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import polight.server.domain.common.entity.BaseTimeEntity;
-import polight.server.domain.policy.entity.Policy;
 
 @Getter
 @Entity
 @Table(
     name = "coverage_items",
     indexes = {
-      @Index(name = "idx_coverage_items_policy_id", columnList = "policy_id"),
-      @Index(name = "idx_coverage_items_policy_sort", columnList = "policy_id,sort_order"),
-      @Index(name = "idx_coverage_items_analysis_result_id", columnList = "analysis_result_id"),
       @Index(name = "idx_coverage_items_analysis_sort", columnList = "analysis_result_id,sort_order")
     })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -37,10 +33,6 @@ public class CoverageItem extends BaseTimeEntity {
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
   private UUID id;
-
-  @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "policy_id", nullable = false)
-  private Policy policy;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
   @JoinColumn(name = "analysis_result_id", nullable = false)
@@ -82,7 +74,6 @@ public class CoverageItem extends BaseTimeEntity {
 
   @Builder
   public CoverageItem(
-      Policy policy,
       AnalysisResult analysisResult,
       String emoji,
       String title,
@@ -95,7 +86,6 @@ public class CoverageItem extends BaseTimeEntity {
       String limitCurrency,
       String conditions,
       Integer sortOrder) {
-    this.policy = Objects.requireNonNull(policy, "policy는 필수입니다.");
     this.analysisResult = Objects.requireNonNull(analysisResult, "analysisResult는 필수입니다.");
     this.emoji = emoji;
     this.title = title;
