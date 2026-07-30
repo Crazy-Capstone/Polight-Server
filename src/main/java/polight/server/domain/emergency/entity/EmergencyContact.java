@@ -8,8 +8,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -17,16 +15,12 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import polight.server.domain.common.entity.BaseTimeEntity;
-import polight.server.domain.policy.entity.Policy;
 
 @Getter
 @Entity
 @Table(
     name = "emergency_contacts",
-    indexes = {
-      @Index(name = "idx_emergency_contacts_country_type", columnList = "country_code,type"),
-      @Index(name = "idx_emergency_contacts_policy_id", columnList = "policy_id")
-    })
+    indexes = @Index(name = "idx_emergency_contacts_country_type", columnList = "country_code,type"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class EmergencyContact extends BaseTimeEntity {
 
@@ -53,10 +47,6 @@ public class EmergencyContact extends BaseTimeEntity {
   @Column(name = "insurer_name", length = 200)
   private String insurerName;
 
-  @ManyToOne(fetch = jakarta.persistence.FetchType.LAZY)
-  @JoinColumn(name = "policy_id")
-  private Policy policy;
-
   @Builder
   public EmergencyContact(
       String countryCode,
@@ -64,14 +54,12 @@ public class EmergencyContact extends BaseTimeEntity {
       String name,
       String phone,
       String description,
-      String insurerName,
-      Policy policy) {
+      String insurerName) {
     this.countryCode = countryCode;
     this.type = type;
     this.name = name;
     this.phone = phone;
     this.description = description;
     this.insurerName = insurerName;
-    this.policy = policy;
   }
 }
