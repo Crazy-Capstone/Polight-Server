@@ -1,2 +1,0 @@
-ALTER TABLE IF EXISTS coverage_items
-  DROP COLUMN IF EXISTS emoji;
