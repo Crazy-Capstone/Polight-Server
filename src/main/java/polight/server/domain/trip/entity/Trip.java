@@ -34,20 +34,8 @@ public class Trip extends BaseTimeEntity {
   @JoinColumn(name = "user_id", nullable = false)
   private User user;
 
-  @Column(nullable = false, length = 100)
-  private String title;
-
-  @Column(name = "country_code", nullable = false, length = 10)
-  private String countryCode;
-
-  @Column(name = "country_name", nullable = false, length = 100)
-  private String countryName;
-
-  @Column(name = "city_name", length = 100)
-  private String cityName;
-
-  @Column(name = "flag_emoji", length = 10)
-  private String flagEmoji;
+  @Column(name = "trip_name", nullable = false, length = 100)
+  private String name;
 
   @Column(name = "start_date", nullable = false)
   private LocalDate startDate;
@@ -62,22 +50,20 @@ public class Trip extends BaseTimeEntity {
   @Builder
   public Trip(
       User user,
-      String title,
-      String countryCode,
-      String countryName,
-      String cityName,
-      String flagEmoji,
+      String name,
       LocalDate startDate,
       LocalDate endDate,
       TripStatus status) {
     this.user = user;
-    this.title = title;
-    this.countryCode = countryCode;
-    this.countryName = countryName;
-    this.cityName = cityName;
-    this.flagEmoji = flagEmoji;
+    this.name = name;
     this.startDate = startDate;
     this.endDate = endDate;
     this.status = status == null ? TripStatus.PLANNED : status;
+  }
+
+  public void update(String name, LocalDate startDate, LocalDate endDate) {
+    this.name = name;
+    this.startDate = startDate;
+    this.endDate = endDate;
   }
 }
