@@ -1,0 +1,62 @@
+name: Build and Push to Amazon ECR
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-northeast-2
+  AWS_ROLE_ARN: arn:aws:iam::054422645032:role/smustudent021-ECR-Push-Role
+  ECR_REPOSITORY: polight/backend
+
+# id-token 이 없으면 OIDC 토큰을 발급받을 수 없어 AssumeRole 이 실패합니다.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-push:
+    name: Build image and push to ECR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          provenance: false
+          tags: |
+            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          {
+            echo "### Pushed to ECR"
+            echo ""
+            echo "- Repository: \`${{ env.ECR_REPOSITORY }}\`"
+            echo "- Region: \`${{ env.AWS_REGION }}\`"
+            echo "- Tags: \`latest\`, \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
