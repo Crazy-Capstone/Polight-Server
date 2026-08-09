@@ -8,16 +8,16 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
 import polight.server.domain.insurance.dto.PolicyDocumentResponse;
 import polight.server.domain.insurance.entity.PolicyDocument;
 import polight.server.domain.insurance.repository.PolicyDocumentRepository;
 import polight.server.domain.trip.entity.Trip;
 import polight.server.domain.trip.service.TripService;
+import polight.server.global.exception.BaseException;
+import polight.server.global.exception.ErrorCode;
 
 @Service
 @RequiredArgsConstructor
@@ -33,7 +33,7 @@ public class PolicyDocumentService {
   @Transactional
   public PolicyDocumentResponse upload(UUID userId, UUID tripId, MultipartFile file) {
     if (file.isEmpty()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "업로드할 약관 파일은 비어 있을 수 없습니다.");
+      throw new BaseException(ErrorCode.EMPTY_POLICY_DOCUMENT_FILE);
     }
 
     Trip trip = tripService.getOwnedTrip(userId, tripId);
@@ -44,8 +44,7 @@ public class PolicyDocumentService {
       Files.createDirectories(target.getParent());
       Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
     } catch (IOException exception) {
-      throw new ResponseStatusException(
-          HttpStatus.INTERNAL_SERVER_ERROR, "약관 파일을 저장하지 못했습니다.", exception);
+      throw new BaseException(ErrorCode.POLICY_DOCUMENT_STORAGE_FAILED, exception);
     }
 
     PolicyDocument document =

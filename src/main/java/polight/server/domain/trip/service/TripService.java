@@ -4,10 +4,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import polight.server.domain.trip.dto.TripCreateRequest;
 import polight.server.domain.trip.dto.TripResponse;
 import polight.server.domain.trip.dto.TripUpdateRequest;
@@ -15,6 +13,8 @@ import polight.server.domain.trip.entity.Trip;
 import polight.server.domain.trip.repository.TripRepository;
 import polight.server.domain.user.entity.User;
 import polight.server.domain.user.repository.UserRepository;
+import polight.server.global.exception.BaseException;
+import polight.server.global.exception.ErrorCode;
 
 @Service
 @RequiredArgsConstructor
@@ -27,7 +27,10 @@ public class TripService {
   @Transactional
   public TripResponse create(UUID userId, TripCreateRequest request) {
     validateDates(request.startDate(), request.endDate());
-    User user = userRepository.findById(userId).orElseThrow(() -> notFound("사용자"));
+    User user =
+        userRepository
+            .findById(userId)
+            .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
     Trip trip =
         tripRepository.save(
             Trip.builder()
@@ -58,17 +61,14 @@ public class TripService {
   }
 
   public Trip getOwnedTrip(UUID userId, UUID tripId) {
-    return tripRepository.findByIdAndUserId(tripId, userId).orElseThrow(() -> notFound("여행"));
-  }
-
-  private ResponseStatusException notFound(String resource) {
-    return new ResponseStatusException(HttpStatus.NOT_FOUND, resource + "을(를) 찾을 수 없습니다.");
+    return tripRepository
+        .findByIdAndUserId(tripId, userId)
+        .orElseThrow(() -> new BaseException(ErrorCode.TRIP_NOT_FOUND));
   }
 
   private void validateDates(LocalDate startDate, LocalDate endDate) {
     if (endDate.isBefore(startDate)) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "여행 종료일은 시작일보다 빠를 수 없습니다.");
+      throw new BaseException(ErrorCode.INVALID_TRIP_PERIOD);
     }
   }
 }

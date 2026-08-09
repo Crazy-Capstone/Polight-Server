@@ -21,6 +21,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
+  private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
+  private final RestAccessDeniedHandler restAccessDeniedHandler;
 
   @Value("${cors.allowed-origins}")
   private List<String> allowedOrigins;
@@ -38,6 +40,9 @@ public class SecurityConfig {
                 auth
                     .requestMatchers(
                         "/",
+                        // 서블릿이 처리하지 못한 예외는 /error로 forward된다. 이 경로를 막으면 원래 상태
+                        // 코드가 인증 실패로 덮여, 서버 오류를 인증 문제로 오인하게 된다.
+                        "/error",
                         "/kakao-login-test.html",
                         "/auth/login/kakao",
                         "/favicon.ico",
@@ -49,6 +54,11 @@ public class SecurityConfig {
                     .permitAll()
                     .anyRequest()
                     .authenticated())
+        .exceptionHandling(
+            handler ->
+                handler
+                    .authenticationEntryPoint(restAuthenticationEntryPoint)
+                    .accessDeniedHandler(restAccessDeniedHandler))
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
     return http.build();
