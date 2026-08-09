@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import polight.server.domain.insurance.dto.PolicyDocumentResponse;
 import polight.server.domain.insurance.entity.PolicyDocument;
+import polight.server.domain.insurance.mapper.PolicyDocumentMapper;
 import polight.server.domain.insurance.repository.PolicyDocumentRepository;
 import polight.server.domain.trip.entity.Trip;
 import polight.server.domain.trip.service.TripService;
@@ -25,20 +26,38 @@ import polight.server.global.exception.ErrorCode;
 public class PolicyDocumentService {
 
   private final PolicyDocumentRepository policyDocumentRepository;
+  private final PolicyDocumentMapper policyDocumentMapper;
   private final TripService tripService;
 
   @Value("${storage.policy-documents-directory:uploads/policy-documents}")
   private String storageDirectory;
 
   @Transactional
-  public PolicyDocumentResponse upload(UUID userId, UUID tripId, MultipartFile file) {
+  public PolicyDocumentResponse uploadDocument(UUID userId, UUID tripId, MultipartFile file) {
     if (file.isEmpty()) {
       throw new BaseException(ErrorCode.EMPTY_POLICY_DOCUMENT_FILE);
     }
 
     Trip trip = tripService.getOwnedTrip(userId, tripId);
     String originalFilename = normalizeFilename(file.getOriginalFilename());
-    Path target = Path.of(storageDirectory).toAbsolutePath().normalize().resolve(UUID.randomUUID().toString());
+    String storedFilePath = storeFile(file);
+
+    PolicyDocument document =
+        policyDocumentMapper.toEntity(trip, file, originalFilename, storedFilePath);
+    return policyDocumentMapper.toResponse(policyDocumentRepository.save(document));
+  }
+
+  public List<PolicyDocumentResponse> getDocuments(UUID userId, UUID tripId) {
+    tripService.getOwnedTrip(userId, tripId);
+
+    return policyDocumentMapper.toResponses(
+        policyDocumentRepository.findAllByTripIdAndUserIdOrderByUploadedAtDesc(tripId, userId));
+  }
+
+  /** 파일을 저장하고 저장 위치를 돌려준다. */
+  private String storeFile(MultipartFile file) {
+    Path target =
+        Path.of(storageDirectory).toAbsolutePath().normalize().resolve(UUID.randomUUID().toString());
 
     try {
       Files.createDirectories(target.getParent());
@@ -46,26 +65,7 @@ public class PolicyDocumentService {
     } catch (IOException exception) {
       throw new BaseException(ErrorCode.POLICY_DOCUMENT_STORAGE_FAILED, exception);
     }
-
-    PolicyDocument document =
-        PolicyDocument.builder()
-            .user(trip.getUser())
-            .trip(trip)
-            .originalFilename(originalFilename)
-            .storedFilePath(target.toString())
-            .contentType(file.getContentType())
-            .fileSize(file.getSize())
-            .build();
-    return PolicyDocumentResponse.from(policyDocumentRepository.save(document));
-  }
-
-  public List<PolicyDocumentResponse> findAll(UUID userId, UUID tripId) {
-    tripService.getOwnedTrip(userId, tripId);
-    return policyDocumentRepository
-        .findAllByTripIdAndUserIdOrderByUploadedAtDesc(tripId, userId)
-        .stream()
-        .map(PolicyDocumentResponse::from)
-        .toList();
+    return target.toString();
   }
 
   private String normalizeFilename(String originalFilename) {
