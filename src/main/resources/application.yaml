@@ -43,4 +43,14 @@ oauth:
     client-secret: ${KAKAO_CLIENT_SECRET:}
 
 storage:
+  # local: 로컬 파일시스템(개발 기본값) / s3: S3 버킷(배포)
+  type: ${STORAGE_TYPE:local}
+
+  # type=local 일 때만 사용
   policy-documents-directory: ${POLICY_DOCUMENTS_DIRECTORY:uploads/policy-documents}
+
+  # type=s3 일 때만 사용. S3_BUCKET 이 없으면 기동에 실패한다.
+  s3:
+    bucket: ${S3_BUCKET}
+    region: ${AWS_REGION:ap-northeast-2}
+    key-prefix: ${S3_KEY_PREFIX:policy-documents}
