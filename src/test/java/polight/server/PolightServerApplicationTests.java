@@ -12,7 +12,8 @@ import org.springframework.boot.test.context.SpringBootTest;
       "spring.flyway.enabled=false",
       "spring.jpa.hibernate.ddl-auto=create-drop",
       "oauth.kakao.client-id=test-client-id",
-      "oauth.kakao.redirect-uri=http://localhost/test"
+      "oauth.kakao.redirect-uri=http://localhost/test",
+      "security.jwt.secret=test-secret-key-with-at-least-32-bytes"
     })
 class PolightServerApplicationTests {
 

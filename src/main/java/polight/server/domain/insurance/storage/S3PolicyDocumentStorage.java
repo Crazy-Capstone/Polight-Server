@@ -4,10 +4,10 @@ import java.io.IOException;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
+import polight.server.global.exception.BaseException;
+import polight.server.global.exception.ErrorCode;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
@@ -47,8 +47,7 @@ public class S3PolicyDocumentStorage implements PolicyDocumentStorage {
       s3Client.putObject(
           request.build(), RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
     } catch (IOException | S3Exception exception) {
-      throw new ResponseStatusException(
-          HttpStatus.INTERNAL_SERVER_ERROR, "약관 파일을 저장하지 못했습니다.", exception);
+      throw new BaseException(ErrorCode.POLICY_DOCUMENT_STORAGE_FAILED, exception);
     }
 
     return key;

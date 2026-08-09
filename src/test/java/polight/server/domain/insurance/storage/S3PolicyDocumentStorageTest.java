@@ -13,7 +13,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.web.server.ResponseStatusException;
+import polight.server.global.exception.BaseException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
@@ -59,7 +59,7 @@ class S3PolicyDocumentStorageTest {
 
     assertThatThrownBy(
             () -> storage.store(new MockMultipartFile("file", "x.pdf", null, "x".getBytes())))
-        .isInstanceOf(ResponseStatusException.class)
+        .isInstanceOf(BaseException.class)
         .hasMessageContaining("약관 파일을 저장하지 못했습니다");
   }
 
@@ -83,7 +83,7 @@ class S3PolicyDocumentStorageTest {
         };
 
     assertThatThrownBy(() -> storage.store(unreadable))
-        .isInstanceOf(ResponseStatusException.class)
+        .isInstanceOf(BaseException.class)
         .hasMessageContaining("약관 파일을 저장하지 못했습니다");
   }
 }

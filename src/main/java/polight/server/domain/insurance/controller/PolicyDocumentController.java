@@ -29,11 +29,11 @@ public class PolicyDocumentController {
 
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @Operation(summary = "여행에 약관 업로드", description = "인증 사용자가 소유한 여행 세션에 약관 파일을 연결합니다.")
-  public ResponseEntity<PolicyDocumentResponse> upload(
+  public ResponseEntity<PolicyDocumentResponse> uploadDocument(
       @AuthenticationPrincipal UUID userId,
       @PathVariable UUID tripId,
       @RequestPart("file") MultipartFile file) {
-    PolicyDocumentResponse response = policyDocumentService.upload(userId, tripId, file);
+    PolicyDocumentResponse response = policyDocumentService.uploadDocument(userId, tripId, file);
     return ResponseEntity.created(
             URI.create("/api/v1/trips/" + tripId + "/documents/" + response.id()))
         .body(response);
@@ -41,8 +41,8 @@ public class PolicyDocumentController {
 
   @GetMapping
   @Operation(summary = "여행의 약관 목록")
-  public List<PolicyDocumentResponse> findAll(
+  public List<PolicyDocumentResponse> getDocuments(
       @AuthenticationPrincipal UUID userId, @PathVariable UUID tripId) {
-    return policyDocumentService.findAll(userId, tripId);
+    return policyDocumentService.getDocuments(userId, tripId);
   }
 }

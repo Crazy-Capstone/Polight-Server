@@ -7,10 +7,10 @@ import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
+import polight.server.global.exception.BaseException;
+import polight.server.global.exception.ErrorCode;
 
 @Component
 @ConditionalOnProperty(name = "storage.type", havingValue = "local", matchIfMissing = true)
@@ -31,8 +31,7 @@ public class LocalPolicyDocumentStorage implements PolicyDocumentStorage {
       Files.createDirectories(target.getParent());
       Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
     } catch (IOException exception) {
-      throw new ResponseStatusException(
-          HttpStatus.INTERNAL_SERVER_ERROR, "약관 파일을 저장하지 못했습니다.", exception);
+      throw new BaseException(ErrorCode.POLICY_DOCUMENT_STORAGE_FAILED, exception);
     }
 
     return target.toString();

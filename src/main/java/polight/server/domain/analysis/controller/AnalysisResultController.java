@@ -25,23 +25,22 @@ public class AnalysisResultController {
 
   @PostMapping
   @Operation(summary = "약관 분석 시작", description = "동일한 문서에 대한 중복 요청은 기존 분석 작업을 반환합니다.")
-  public ResponseEntity<AnalysisResponse> start(
+  public ResponseEntity<AnalysisResponse> startAnalysis(
       @AuthenticationPrincipal UUID userId,
       @PathVariable UUID tripId,
       @PathVariable UUID documentId) {
-    AnalysisResponse response = analysisResultService.start(userId, tripId, documentId);
+    AnalysisResponse response = analysisResultService.startAnalysis(userId, tripId, documentId);
     return ResponseEntity.created(
-            URI.create(
-                "/api/v1/trips/" + tripId + "/documents/" + documentId + "/analysis"))
+            URI.create("/api/v1/trips/" + tripId + "/documents/" + documentId + "/analysis"))
         .body(response);
   }
 
   @GetMapping
   @Operation(summary = "약관 분석 상태 및 결과 조회")
-  public AnalysisResponse find(
+  public AnalysisResponse getAnalysis(
       @AuthenticationPrincipal UUID userId,
       @PathVariable UUID tripId,
       @PathVariable UUID documentId) {
-    return analysisResultService.find(userId, tripId, documentId);
+    return analysisResultService.getAnalysis(userId, tripId, documentId);
   }
 }
