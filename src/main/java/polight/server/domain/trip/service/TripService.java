@@ -10,6 +10,7 @@ import polight.server.domain.trip.dto.TripCreateRequest;
 import polight.server.domain.trip.dto.TripResponse;
 import polight.server.domain.trip.dto.TripUpdateRequest;
 import polight.server.domain.trip.entity.Trip;
+import polight.server.domain.trip.mapper.TripMapper;
 import polight.server.domain.trip.repository.TripRepository;
 import polight.server.domain.user.entity.User;
 import polight.server.domain.user.repository.UserRepository;
@@ -23,50 +24,52 @@ public class TripService {
 
   private final TripRepository tripRepository;
   private final UserRepository userRepository;
+  private final TripMapper tripMapper;
 
   @Transactional
-  public TripResponse create(UUID userId, TripCreateRequest request) {
-    validateDates(request.startDate(), request.endDate());
+  public TripResponse createTrip(UUID userId, TripCreateRequest request) {
+    validateTripPeriod(request.startDate(), request.endDate());
+
     User user =
         userRepository
             .findById(userId)
             .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
-    Trip trip =
-        tripRepository.save(
-            Trip.builder()
-                .user(user)
-                .name(request.name().trim())
-                .startDate(request.startDate())
-                .endDate(request.endDate())
-                .build());
-    return TripResponse.from(trip);
+
+    Trip trip = tripRepository.save(tripMapper.toEntity(user, request));
+    return tripMapper.toResponse(trip);
   }
 
-  public List<TripResponse> findAll(UUID userId) {
-    return tripRepository.findAllByUserIdOrderByCreatedAtDesc(userId).stream()
-        .map(TripResponse::from)
-        .toList();
+  public List<TripResponse> getTrips(UUID userId) {
+    return tripMapper.toResponses(tripRepository.findAllByUserIdOrderByCreatedAtDesc(userId));
   }
 
-  public TripResponse find(UUID userId, UUID tripId) {
-    return TripResponse.from(getOwnedTrip(userId, tripId));
+  public TripResponse getTrip(UUID userId, UUID tripId) {
+    return tripMapper.toResponse(getOwnedTrip(userId, tripId));
   }
 
   @Transactional
-  public TripResponse update(UUID userId, UUID tripId, TripUpdateRequest request) {
-    validateDates(request.startDate(), request.endDate());
+  public TripResponse updateTrip(UUID userId, UUID tripId, TripUpdateRequest request) {
+    validateTripPeriod(request.startDate(), request.endDate());
+
     Trip trip = getOwnedTrip(userId, tripId);
     trip.update(request.name().trim(), request.startDate(), request.endDate());
-    return TripResponse.from(trip);
+
+    return tripMapper.toResponse(trip);
   }
 
+  /**
+   * 소유권을 확인한 여행 엔티티를 돌려준다.
+   *
+   * <p>다른 도메인 서비스가 "이 사용자의 여행이 맞는지" 확인하면서 엔티티를 함께 얻기 위해 호출한다. 응답 DTO를 돌려주는 {@link #getTrip}과 용도가
+   * 다르다.
+   */
   public Trip getOwnedTrip(UUID userId, UUID tripId) {
     return tripRepository
         .findByIdAndUserId(tripId, userId)
         .orElseThrow(() -> new BaseException(ErrorCode.TRIP_NOT_FOUND));
   }
 
-  private void validateDates(LocalDate startDate, LocalDate endDate) {
+  private void validateTripPeriod(LocalDate startDate, LocalDate endDate) {
     if (endDate.isBefore(startDate)) {
       throw new BaseException(ErrorCode.INVALID_TRIP_PERIOD);
     }

@@ -31,31 +31,30 @@ public class TripController {
 
   @PostMapping
   @Operation(summary = "여행 세션 생성", description = "사용자가 직접 입력한 이름으로 여행 세션을 생성합니다.")
-  public ResponseEntity<TripResponse> create(
+  public ResponseEntity<TripResponse> createTrip(
       @AuthenticationPrincipal UUID userId, @Valid @RequestBody TripCreateRequest request) {
-    TripResponse response = tripService.create(userId, request);
+    TripResponse response = tripService.createTrip(userId, request);
     return ResponseEntity.created(URI.create("/api/v1/trips/" + response.id())).body(response);
   }
 
   @GetMapping
   @Operation(summary = "내 여행 세션 목록")
-  public List<TripResponse> findAll(@AuthenticationPrincipal UUID userId) {
-    return tripService.findAll(userId);
+  public List<TripResponse> getTrips(@AuthenticationPrincipal UUID userId) {
+    return tripService.getTrips(userId);
   }
 
   @GetMapping("/{tripId}")
   @Operation(summary = "여행 세션 조회")
-  public TripResponse find(
-      @AuthenticationPrincipal UUID userId, @PathVariable UUID tripId) {
-    return tripService.find(userId, tripId);
+  public TripResponse getTrip(@AuthenticationPrincipal UUID userId, @PathVariable UUID tripId) {
+    return tripService.getTrip(userId, tripId);
   }
 
   @PatchMapping("/{tripId}")
   @Operation(summary = "여행 세션 정보 변경")
-  public TripResponse update(
+  public TripResponse updateTrip(
       @AuthenticationPrincipal UUID userId,
       @PathVariable UUID tripId,
       @Valid @RequestBody TripUpdateRequest request) {
-    return tripService.update(userId, tripId, request);
+    return tripService.updateTrip(userId, tripId, request);
   }
 }
