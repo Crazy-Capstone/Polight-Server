@@ -39,3 +39,6 @@ out/
 
 ### DS_Store
 .DS_Store
+
+### 로컬 업로드 파일 ###
+uploads/

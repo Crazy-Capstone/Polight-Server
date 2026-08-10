@@ -1,13 +1,9 @@
 package polight.server.domain.insurance.service;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -15,6 +11,7 @@ import polight.server.domain.insurance.dto.PolicyDocumentResponse;
 import polight.server.domain.insurance.entity.PolicyDocument;
 import polight.server.domain.insurance.mapper.PolicyDocumentMapper;
 import polight.server.domain.insurance.repository.PolicyDocumentRepository;
+import polight.server.domain.insurance.storage.PolicyDocumentStorage;
 import polight.server.domain.trip.entity.Trip;
 import polight.server.domain.trip.service.TripService;
 import polight.server.global.exception.BaseException;
@@ -28,9 +25,7 @@ public class PolicyDocumentService {
   private final PolicyDocumentRepository policyDocumentRepository;
   private final PolicyDocumentMapper policyDocumentMapper;
   private final TripService tripService;
-
-  @Value("${storage.policy-documents-directory:uploads/policy-documents}")
-  private String storageDirectory;
+  private final PolicyDocumentStorage policyDocumentStorage;
 
   @Transactional
   public PolicyDocumentResponse uploadDocument(UUID userId, UUID tripId, MultipartFile file) {
@@ -40,7 +35,7 @@ public class PolicyDocumentService {
 
     Trip trip = tripService.getOwnedTrip(userId, tripId);
     String originalFilename = normalizeFilename(file.getOriginalFilename());
-    String storedFilePath = storeFile(file);
+    String storedFilePath = policyDocumentStorage.store(file);
 
     PolicyDocument document =
         policyDocumentMapper.toEntity(trip, file, originalFilename, storedFilePath);
@@ -52,20 +47,6 @@ public class PolicyDocumentService {
 
     return policyDocumentMapper.toResponses(
         policyDocumentRepository.findAllByTripIdAndUserIdOrderByUploadedAtDesc(tripId, userId));
-  }
-
-  /** 파일을 저장하고 저장 위치를 돌려준다. */
-  private String storeFile(MultipartFile file) {
-    Path target =
-        Path.of(storageDirectory).toAbsolutePath().normalize().resolve(UUID.randomUUID().toString());
-
-    try {
-      Files.createDirectories(target.getParent());
-      Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-    } catch (IOException exception) {
-      throw new BaseException(ErrorCode.POLICY_DOCUMENT_STORAGE_FAILED, exception);
-    }
-    return target.toString();
   }
 
   private String normalizeFilename(String originalFilename) {
