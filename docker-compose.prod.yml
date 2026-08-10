@@ -24,7 +24,7 @@ services:
 
 
   backend:
-    image: 054422645032.dkr.ecr.ap-northeast-2.amazonaws.com/polight/backend:latest
+    image: ${BACKEND_IMAGE:-054422645032.dkr.ecr.ap-northeast-2.amazonaws.com/polight/backend:latest}
     container_name: polight-backend
     restart: unless-stopped
 
