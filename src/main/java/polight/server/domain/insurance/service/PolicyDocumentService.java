@@ -29,11 +29,20 @@ public class PolicyDocumentService {
 
   @Transactional
   public PolicyDocumentResponse uploadDocument(UUID userId, UUID tripId, MultipartFile file) {
+    return uploadDocumentTo(tripService.getOwnedTrip(userId, tripId), file);
+  }
+
+  /**
+   * 소유권이 이미 확인된 여행에 약관 문서를 저장한다.
+   *
+   * <p>여행과 문서를 한 요청으로 함께 만드는 흐름에서, 방금 생성한 여행 엔티티를 그대로 넘겨 받기 위해 분리했다.
+   */
+  @Transactional
+  public PolicyDocumentResponse uploadDocumentTo(Trip trip, MultipartFile file) {
     if (file.isEmpty()) {
       throw new BaseException(ErrorCode.EMPTY_POLICY_DOCUMENT_FILE);
     }
 
-    Trip trip = tripService.getOwnedTrip(userId, tripId);
     String originalFilename = normalizeFilename(file.getOriginalFilename());
     String storedFilePath = policyDocumentStorage.store(file);
 
