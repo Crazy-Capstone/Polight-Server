@@ -11,4 +11,5 @@ public record PolicyDocumentResponse(
     String contentType,
     Long fileSize,
     DocumentParseStatus parseStatus,
-    LocalDateTime uploadedAt) {}
+    LocalDateTime uploadedAt
+) {}

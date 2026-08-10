@@ -13,7 +13,7 @@ import polight.server.domain.trip.entity.Trip;
 import polight.server.domain.trip.mapper.TripMapper;
 import polight.server.domain.trip.repository.TripRepository;
 import polight.server.domain.user.entity.User;
-import polight.server.domain.user.repository.UserRepository;
+import polight.server.domain.user.service.UserService;
 import polight.server.global.exception.BaseException;
 import polight.server.global.exception.ErrorCode;
 
@@ -23,20 +23,27 @@ import polight.server.global.exception.ErrorCode;
 public class TripService {
 
   private final TripRepository tripRepository;
-  private final UserRepository userRepository;
+  private final UserService userService;
   private final TripMapper tripMapper;
 
   @Transactional
   public TripResponse createTrip(UUID userId, TripCreateRequest request) {
+    return tripMapper.toResponse(createTripEntity(userId, request));
+  }
+
+  /**
+   * 여행을 생성하고 엔티티를 돌려준다.
+   *
+   * <p>같은 트랜잭션에서 여행과 약관 문서를 함께 만들 때, 방금 저장한 여행을 다시 조회하지 않고 그대로 넘기기 위해 사용한다. 응답 DTO가 필요하면 {@link
+   * #createTrip}을 쓴다.
+   */
+  @Transactional
+  public Trip createTripEntity(UUID userId, TripCreateRequest request) {
     validateTripPeriod(request.startDate(), request.endDate());
 
-    User user =
-        userRepository
-            .findById(userId)
-            .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
+    User user = userService.getUser(userId);
 
-    Trip trip = tripRepository.save(tripMapper.toEntity(user, request));
-    return tripMapper.toResponse(trip);
+    return tripRepository.save(tripMapper.toEntity(user, request));
   }
 
   public List<TripResponse> getTrips(UUID userId) {

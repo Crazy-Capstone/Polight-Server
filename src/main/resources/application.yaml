@@ -30,6 +30,13 @@ spring:
     compose:
       enabled: false
 
+  servlet:
+    multipart:
+      # 기본값 1MB로는 실제 약관 PDF(수 MB~수십 MB)를 받을 수 없다.
+      # max-request-size 는 파일 외에 여행 정보 파트까지 포함하므로 파일 상한보다 크게 둔다.
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE:30MB}
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:35MB}
+
 security:
   jwt:
     # security.jwt.secret 은 여기에 정의하지 않습니다.
