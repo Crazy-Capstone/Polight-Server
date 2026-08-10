@@ -2,16 +2,16 @@ package polight.server.domain.analysis.service;
 
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import polight.server.domain.analysis.dto.AnalysisResponse;
 import polight.server.domain.analysis.entity.AnalysisResult;
+import polight.server.domain.analysis.mapper.AnalysisMapper;
 import polight.server.domain.analysis.repository.AnalysisResultRepository;
 import polight.server.domain.insurance.entity.PolicyDocument;
-import polight.server.domain.insurance.repository.PolicyDocumentRepository;
-import polight.server.domain.trip.service.TripService;
+import polight.server.domain.insurance.service.PolicyDocumentService;
+import polight.server.global.exception.BaseException;
+import polight.server.global.exception.ErrorCode;
 
 @Service
 @RequiredArgsConstructor
@@ -19,36 +19,28 @@ import polight.server.domain.trip.service.TripService;
 public class AnalysisResultService {
 
   private final AnalysisResultRepository analysisResultRepository;
-  private final PolicyDocumentRepository policyDocumentRepository;
-  private final TripService tripService;
+  private final AnalysisMapper analysisMapper;
+  private final PolicyDocumentService policyDocumentService;
 
+  /** 분석을 시작한다. 같은 문서로 다시 요청하면 이미 만들어진 분석 작업을 그대로 돌려준다. */
   @Transactional
-  public AnalysisResponse start(UUID userId, UUID tripId, UUID documentId) {
-    PolicyDocument document = getOwnedDocument(userId, tripId, documentId);
+  public AnalysisResponse startAnalysis(UUID userId, UUID tripId, UUID documentId) {
+    PolicyDocument document = policyDocumentService.getOwnedDocument(userId, tripId, documentId);
+
     AnalysisResult result =
         analysisResultRepository
             .findOneByDocumentId(documentId)
-            .orElseGet(
-                () ->
-                    analysisResultRepository.save(
-                        AnalysisResult.builder().document(document).policy(document.getPolicy()).build()));
-    return AnalysisResponse.from(result);
+            .orElseGet(() -> analysisResultRepository.save(analysisMapper.toEntity(document)));
+
+    return analysisMapper.toResponse(result);
   }
 
-  public AnalysisResponse find(UUID userId, UUID tripId, UUID documentId) {
-    getOwnedDocument(userId, tripId, documentId);
+  public AnalysisResponse getAnalysis(UUID userId, UUID tripId, UUID documentId) {
+    policyDocumentService.getOwnedDocument(userId, tripId, documentId);
+
     return analysisResultRepository
         .findOneByDocumentId(documentId)
-        .map(AnalysisResponse::from)
-        .orElseThrow(
-            () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "분석 결과를 찾을 수 없습니다."));
-  }
-
-  private PolicyDocument getOwnedDocument(UUID userId, UUID tripId, UUID documentId) {
-    tripService.getOwnedTrip(userId, tripId);
-    return policyDocumentRepository
-        .findByIdAndTripIdAndUserId(documentId, tripId, userId)
-        .orElseThrow(
-            () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "약관 문서를 찾을 수 없습니다."));
+        .map(analysisMapper::toResponse)
+        .orElseThrow(() -> new BaseException(ErrorCode.ANALYSIS_RESULT_NOT_FOUND));
   }
 }

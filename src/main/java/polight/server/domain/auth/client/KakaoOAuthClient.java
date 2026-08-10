@@ -7,12 +7,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.server.ResponseStatusException;
 import polight.server.domain.auth.config.KakaoOAuthProperties;
 import polight.server.domain.auth.dto.kakao.KakaoTokenResponse;
 import polight.server.domain.auth.dto.kakao.KakaoUserInfoResponse;
-
-import static org.springframework.http.HttpStatus.UNAUTHORIZED;
+import polight.server.global.exception.BaseException;
+import polight.server.global.exception.ErrorCode;
 
 @Component
 @RequiredArgsConstructor
@@ -31,8 +30,10 @@ public class KakaoOAuthClient {
       form.add("client_secret", kakaoOAuthProperties.clientSecret());
     }
 
+    // 응답 검증은 try 밖에서 한다. try 안에서 던지면 아래 catch가 다시 잡아 예외를 이중으로 감싼다.
+    KakaoTokenResponse response;
     try {
-      KakaoTokenResponse response =
+      response =
           restClient
               .post()
               .uri("https://kauth.kakao.com/oauth/token")
@@ -40,32 +41,33 @@ public class KakaoOAuthClient {
               .body(form)
               .retrieve()
               .body(KakaoTokenResponse.class);
-
-      if (response == null || response.accessToken() == null || response.accessToken().isBlank()) {
-        throw new ResponseStatusException(UNAUTHORIZED, "카카오 토큰 발급에 실패했습니다.");
-      }
-      return response;
     } catch (Exception e) {
-      throw new ResponseStatusException(UNAUTHORIZED, "카카오 토큰 발급에 실패했습니다.", e);
+      throw new BaseException(ErrorCode.KAKAO_TOKEN_REQUEST_FAILED, e);
     }
+
+    if (response == null || response.accessToken() == null || response.accessToken().isBlank()) {
+      throw new BaseException(ErrorCode.KAKAO_TOKEN_REQUEST_FAILED);
+    }
+    return response;
   }
 
   public KakaoUserInfoResponse requestUserInfo(String accessToken) {
+    KakaoUserInfoResponse response;
     try {
-      KakaoUserInfoResponse response =
+      response =
           restClient
               .get()
               .uri("https://kapi.kakao.com/v2/user/me")
               .header("Authorization", "Bearer " + accessToken)
               .retrieve()
               .body(KakaoUserInfoResponse.class);
-
-      if (response == null || Objects.isNull(response.id())) {
-        throw new ResponseStatusException(UNAUTHORIZED, "카카오 사용자 정보 조회에 실패했습니다.");
-      }
-      return response;
     } catch (Exception e) {
-      throw new ResponseStatusException(UNAUTHORIZED, "카카오 사용자 정보 조회에 실패했습니다.", e);
+      throw new BaseException(ErrorCode.KAKAO_USER_INFO_REQUEST_FAILED, e);
     }
+
+    if (response == null || Objects.isNull(response.id())) {
+      throw new BaseException(ErrorCode.KAKAO_USER_INFO_REQUEST_FAILED);
+    }
+    return response;
   }
 }

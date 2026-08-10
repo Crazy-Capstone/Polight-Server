@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: polight-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: UTC
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - polight-network
+
+
+  backend:
+    image: ${BACKEND_IMAGE:-054422645032.dkr.ecr.ap-northeast-2.amazonaws.com/polight/backend:latest}
+    container_name: polight-backend
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+
+      SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
+
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+
+      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY}
+      KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
+
+      # 업로드된 약관 파일은 S3 에 저장한다. 컨테이너 쓰기 레이어에 두면
+      # 이미지 교체/컨테이너 재생성 때 사라져 DB의 stored_file_path 와 어긋난다.
+      STORAGE_TYPE: s3
+      S3_BUCKET: ${S3_BUCKET}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+
+    ports:
+      - "80:8080"
+
+    networks:
+      - polight-network
+
+
+volumes:
+  postgres_data:
+
+
+networks:
+  polight-network:

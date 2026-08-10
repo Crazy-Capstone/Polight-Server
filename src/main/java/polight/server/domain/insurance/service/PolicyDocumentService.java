@@ -1,23 +1,21 @@
 package polight.server.domain.insurance.service;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
 import polight.server.domain.insurance.dto.PolicyDocumentResponse;
 import polight.server.domain.insurance.entity.PolicyDocument;
+import polight.server.domain.insurance.mapper.PolicyDocumentMapper;
 import polight.server.domain.insurance.repository.PolicyDocumentRepository;
+import polight.server.domain.insurance.storage.PolicyDocumentStorage;
 import polight.server.domain.trip.entity.Trip;
 import polight.server.domain.trip.service.TripService;
+import polight.server.global.exception.BaseException;
+import polight.server.global.exception.ErrorCode;
 
 @Service
 @RequiredArgsConstructor
@@ -25,48 +23,53 @@ import polight.server.domain.trip.service.TripService;
 public class PolicyDocumentService {
 
   private final PolicyDocumentRepository policyDocumentRepository;
+  private final PolicyDocumentMapper policyDocumentMapper;
   private final TripService tripService;
-
-  @Value("${storage.policy-documents-directory:uploads/policy-documents}")
-  private String storageDirectory;
+  private final PolicyDocumentStorage policyDocumentStorage;
 
   @Transactional
-  public PolicyDocumentResponse upload(UUID userId, UUID tripId, MultipartFile file) {
-    if (file.isEmpty()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "업로드할 약관 파일은 비어 있을 수 없습니다.");
-    }
-
-    Trip trip = tripService.getOwnedTrip(userId, tripId);
-    String originalFilename = normalizeFilename(file.getOriginalFilename());
-    Path target = Path.of(storageDirectory).toAbsolutePath().normalize().resolve(UUID.randomUUID().toString());
-
-    try {
-      Files.createDirectories(target.getParent());
-      Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-    } catch (IOException exception) {
-      throw new ResponseStatusException(
-          HttpStatus.INTERNAL_SERVER_ERROR, "약관 파일을 저장하지 못했습니다.", exception);
-    }
-
-    PolicyDocument document =
-        PolicyDocument.builder()
-            .user(trip.getUser())
-            .trip(trip)
-            .originalFilename(originalFilename)
-            .storedFilePath(target.toString())
-            .contentType(file.getContentType())
-            .fileSize(file.getSize())
-            .build();
-    return PolicyDocumentResponse.from(policyDocumentRepository.save(document));
+  public PolicyDocumentResponse uploadDocument(UUID userId, UUID tripId, MultipartFile file) {
+    return uploadDocumentTo(tripService.getOwnedTrip(userId, tripId), file);
   }
 
-  public List<PolicyDocumentResponse> findAll(UUID userId, UUID tripId) {
+  /**
+   * 소유권이 이미 확인된 여행에 약관 문서를 저장한다.
+   *
+   * <p>여행과 문서를 한 요청으로 함께 만드는 흐름에서, 방금 생성한 여행 엔티티를 그대로 넘겨 받기 위해 분리했다.
+   */
+  @Transactional
+  public PolicyDocumentResponse uploadDocumentTo(Trip trip, MultipartFile file) {
+    if (file.isEmpty()) {
+      throw new BaseException(ErrorCode.EMPTY_POLICY_DOCUMENT_FILE);
+    }
+
+    String originalFilename = normalizeFilename(file.getOriginalFilename());
+    String storedFilePath = policyDocumentStorage.store(file);
+
+    PolicyDocument document =
+        policyDocumentMapper.toEntity(trip, file, originalFilename, storedFilePath);
+    return policyDocumentMapper.toResponse(policyDocumentRepository.save(document));
+  }
+
+  public List<PolicyDocumentResponse> getDocuments(UUID userId, UUID tripId) {
     tripService.getOwnedTrip(userId, tripId);
+
+    return policyDocumentMapper.toResponses(
+        policyDocumentRepository.findAllByTripIdAndUserIdOrderByUploadedAtDesc(tripId, userId));
+  }
+
+  /**
+   * 소유권을 확인한 약관 문서 엔티티를 돌려준다.
+   *
+   * <p>다른 도메인 서비스가 "이 사용자의, 이 여행에 속한 문서가 맞는지" 확인하면서 엔티티를 함께 얻기 위해 호출한다. 여행 소유권을 먼저 확인해 잘못된 tripId와
+   * 잘못된 documentId를 다른 에러로 구분한다.
+   */
+  public PolicyDocument getOwnedDocument(UUID userId, UUID tripId, UUID documentId) {
+    tripService.getOwnedTrip(userId, tripId);
+
     return policyDocumentRepository
-        .findAllByTripIdAndUserIdOrderByUploadedAtDesc(tripId, userId)
-        .stream()
-        .map(PolicyDocumentResponse::from)
-        .toList();
+        .findByIdAndTripIdAndUserId(documentId, tripId, userId)
+        .orElseThrow(() -> new BaseException(ErrorCode.POLICY_DOCUMENT_NOT_FOUND));
   }
 
   private String normalizeFilename(String originalFilename) {

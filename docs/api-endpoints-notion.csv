@@ -1,0 +1,19 @@
+도메인,기능 설명,엔드포인트,Method,토큰 필요 여부,dev 배포,prod 배포,구현 상태,요청 형식,성공 응답,주요 에러코드,상세 문서
+인증,카카오 로그인 (인가코드 → JWT 발급·자동가입),/api/auth/kakao/login,POST,false,false,false,완료,json,200,INVALID_INPUT / KAKAO_TOKEN_REQUEST_FAILED / KAKAO_USER_INFO_REQUEST_FAILED / KAKAO_USER_ID_NOT_FOUND,api-spec.md 3.1
+인증,로그아웃,,POST,true,false,false,예정(경로 미확정),,,,현재 클라이언트 토큰 폐기로 처리
+인증,토큰 재발급 (리프레시),,POST,false,false,false,예정(경로 미확정),,,,리프레시 토큰 미구현
+회원,내 정보 조회,,GET,true,false,false,예정(경로 미확정),없음,,,현재 JWT payload의 email/name/provider 클레임 사용
+여행,여행 세션 생성,/api/v1/trips,POST,true,false,false,완료,json,201 (+ Location 헤더),INVALID_INPUT / INVALID_TRIP_PERIOD / USER_NOT_FOUND,api-spec.md 3.2
+여행,내 여행 목록 (생성일 내림차순·페이징 없음),/api/v1/trips,GET,true,false,false,완료,없음,200,AUTHENTICATION_REQUIRED,api-spec.md 3.3
+여행,여행 단건 조회,/api/v1/trips/{tripId},GET,true,false,false,완료,없음,200,INVALID_INPUT / TRIP_NOT_FOUND,api-spec.md 3.4
+여행,여행 정보 수정 (부분수정 아님·3필드 전부 필수),/api/v1/trips/{tripId},PATCH,true,false,false,완료,json,200,INVALID_INPUT / INVALID_TRIP_PERIOD / TRIP_NOT_FOUND,api-spec.md 3.5
+여행,여행 삭제,,DELETE,true,false,false,예정(경로 미확정),,,,
+약관,여행에 약관 파일 업로드,/api/v1/trips/{tripId}/documents,POST,true,false,false,완료,multipart,201 (+ Location 헤더),EMPTY_POLICY_DOCUMENT_FILE / TRIP_NOT_FOUND / POLICY_DOCUMENT_TOO_LARGE / POLICY_DOCUMENT_STORAGE_FAILED,api-spec.md 3.6
+약관,여행의 약관 목록 (업로드 시각 내림차순),/api/v1/trips/{tripId}/documents,GET,true,false,false,완료,없음,200,TRIP_NOT_FOUND,api-spec.md 3.7
+약관,약관 단건 조회 / 다운로드,,GET,true,false,false,예정(경로 미확정),,,,
+약관,약관 삭제,,DELETE,true,false,false,예정(경로 미확정),,,,
+분석,약관 분석 시작 (멱등·중복 호출 시 기존 작업 반환),/api/v1/trips/{tripId}/documents/{documentId}/analysis,POST,true,false,false,완료,없음,201 (+ Location 헤더),TRIP_NOT_FOUND / POLICY_DOCUMENT_NOT_FOUND,api-spec.md 3.8
+분석,분석 상태·결과 조회 (폴링용),/api/v1/trips/{tripId}/documents/{documentId}/analysis,GET,true,false,false,완료,없음,200,TRIP_NOT_FOUND / POLICY_DOCUMENT_NOT_FOUND / ANALYSIS_RESULT_NOT_FOUND,api-spec.md 3.9
+채팅,채팅 메시지 API,,,true,false,false,미구현,,,,컨트롤러 클래스만 존재 (/api/chat-messages)
+알림,알림 API,,,true,false,false,미구현,,,,엔티티만 존재·컨트롤러 없음
+긴급,긴급 상황 API,,,true,false,false,미구현,,,,엔티티만 존재·컨트롤러 없음
