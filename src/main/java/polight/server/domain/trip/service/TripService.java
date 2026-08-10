@@ -13,7 +13,7 @@ import polight.server.domain.trip.entity.Trip;
 import polight.server.domain.trip.mapper.TripMapper;
 import polight.server.domain.trip.repository.TripRepository;
 import polight.server.domain.user.entity.User;
-import polight.server.domain.user.repository.UserRepository;
+import polight.server.domain.user.service.UserService;
 import polight.server.global.exception.BaseException;
 import polight.server.global.exception.ErrorCode;
 
@@ -23,7 +23,7 @@ import polight.server.global.exception.ErrorCode;
 public class TripService {
 
   private final TripRepository tripRepository;
-  private final UserRepository userRepository;
+  private final UserService userService;
   private final TripMapper tripMapper;
 
   @Transactional
@@ -41,10 +41,7 @@ public class TripService {
   public Trip createTripEntity(UUID userId, TripCreateRequest request) {
     validateTripPeriod(request.startDate(), request.endDate());
 
-    User user =
-        userRepository
-            .findById(userId)
-            .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
+    User user = userService.getUser(userId);
 
     return tripRepository.save(tripMapper.toEntity(user, request));
   }

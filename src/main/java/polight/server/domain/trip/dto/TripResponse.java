@@ -12,4 +12,5 @@ public record TripResponse(
     LocalDate endDate,
     TripStatus status,
     LocalDateTime createdAt,
-    LocalDateTime updatedAt) {}
+    LocalDateTime updatedAt
+) {}

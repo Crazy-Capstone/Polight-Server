@@ -58,6 +58,20 @@ public class PolicyDocumentService {
         policyDocumentRepository.findAllByTripIdAndUserIdOrderByUploadedAtDesc(tripId, userId));
   }
 
+  /**
+   * 소유권을 확인한 약관 문서 엔티티를 돌려준다.
+   *
+   * <p>다른 도메인 서비스가 "이 사용자의, 이 여행에 속한 문서가 맞는지" 확인하면서 엔티티를 함께 얻기 위해 호출한다. 여행 소유권을 먼저 확인해 잘못된 tripId와
+   * 잘못된 documentId를 다른 에러로 구분한다.
+   */
+  public PolicyDocument getOwnedDocument(UUID userId, UUID tripId, UUID documentId) {
+    tripService.getOwnedTrip(userId, tripId);
+
+    return policyDocumentRepository
+        .findByIdAndTripIdAndUserId(documentId, tripId, userId)
+        .orElseThrow(() -> new BaseException(ErrorCode.POLICY_DOCUMENT_NOT_FOUND));
+  }
+
   private String normalizeFilename(String originalFilename) {
     if (originalFilename == null || originalFilename.isBlank()) {
       return "policy-document";
