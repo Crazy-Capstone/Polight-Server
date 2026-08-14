@@ -31,14 +31,15 @@ public class AuthService {
 
     String providerId = String.valueOf(userInfo.id());
     String email = userInfo.kakaoAccount() != null ? userInfo.kakaoAccount().email() : null;
-    String nickname =
-        userInfo.kakaoAccount() != null && userInfo.kakaoAccount().profile() != null
-            ? userInfo.kakaoAccount().profile().nickname()
-            : null;
+    var profile =
+        userInfo.kakaoAccount() != null ? userInfo.kakaoAccount().profile() : null;
+    String nickname = profile != null ? profile.nickname() : null;
+    String profileImageUrl = profile != null ? profile.profileImageUrl() : null;
 
     User user = userService.findOrCreateKakaoUser(providerId, email, nickname == null ? "카카오사용자" : nickname);
     String accessToken = jwtTokenProvider.createAccessToken(user);
 
-    return new AuthTokenResponse(accessToken, jwtTokenProvider.getAccessTokenExpirySeconds());
+    return new AuthTokenResponse(
+        accessToken, jwtTokenProvider.getAccessTokenExpirySeconds(), user.getName(), profileImageUrl);
   }
 }
