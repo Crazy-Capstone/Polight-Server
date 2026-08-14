@@ -1,5 +1,6 @@
 package polight.server.domain.auth.client;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -12,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 import polight.server.domain.auth.config.KakaoOAuthProperties;
+import polight.server.domain.auth.dto.kakao.KakaoUserInfoResponse;
 
 class KakaoOAuthClientTest {
 
@@ -54,11 +56,15 @@ class KakaoOAuthClientTest {
         .andRespond(
             withSuccess(
                 """
-            {"id":12345,"kakao_account":{"email":"user@example.com","profile":{"nickname":"tester"}}}
+            {"id":12345,"kakao_account":{"email":"user@example.com","profile":{"nickname":"tester","profile_image_url":"https://img.kakao/profile.jpg"}}}
             """,
                 MediaType.APPLICATION_JSON));
 
-    client.requestUserInfo("kakao-access-token");
+    KakaoUserInfoResponse response = client.requestUserInfo("kakao-access-token");
     server.verify();
+
+    assertThat(response.kakaoAccount().profile().nickname()).isEqualTo("tester");
+    assertThat(response.kakaoAccount().profile().profileImageUrl())
+        .isEqualTo("https://img.kakao/profile.jpg");
   }
 }

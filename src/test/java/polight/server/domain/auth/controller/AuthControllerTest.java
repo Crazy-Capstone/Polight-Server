@@ -3,6 +3,7 @@ package polight.server.domain.auth.controller;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,8 @@ class AuthControllerTest {
 
   @Test
   void kakaoLogin_acceptsAuthorizationCodeOnly() throws Exception {
-    given(authService.loginWithKakao(anyString())).willReturn(new AuthTokenResponse("token", 3600L));
+    given(authService.loginWithKakao(anyString()))
+        .willReturn(new AuthTokenResponse("token", 3600L, "닉네임", "https://img.kakao/profile.jpg"));
 
     mockMvc
         .perform(
@@ -37,7 +39,9 @@ class AuthControllerTest {
                 .content("""
                     {"authorizationCode":"code"}
                     """))
-        .andExpect(status().isOk());
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.nickname").value("닉네임"))
+        .andExpect(jsonPath("$.profileImageUrl").value("https://img.kakao/profile.jpg"));
   }
 
   @Test

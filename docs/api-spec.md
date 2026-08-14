@@ -126,11 +126,15 @@ POST /api/auth/kakao/login
 | --- | --- | --- |
 | `accessToken` | string | 이후 모든 요청의 `Authorization: Bearer {값}` |
 | `expiresInSeconds` | number | 만료까지 남은 초 (기본 3600) |
+| `nickname` | string | 사용자 닉네임. 카카오가 닉네임을 주지 않으면 `"카카오사용자"` |
+| `profileImageUrl` | string \| null | 카카오 프로필 이미지 URL. 동의 항목 미동의/미설정이면 `null` |
 
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-  "expiresInSeconds": 3600
+  "expiresInSeconds": 3600,
+  "nickname": "홍길동",
+  "profileImageUrl": "https://k.kakaocdn.net/dn/abc/img_640x640.jpg"
 }
 ```
 
