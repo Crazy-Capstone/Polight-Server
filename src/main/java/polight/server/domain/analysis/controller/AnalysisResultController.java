@@ -20,14 +20,23 @@ import polight.server.domain.analysis.service.CoverageAnalysisService;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/trips/{tripId}/documents/{documentId}/analysis")
-@Tag(name = "Analysis", description = "여행 약관 분석 API")
+@Tag(name = "Analysis", description = "여행 보험 문서(증권·약관) 분석 API")
 public class AnalysisResultController {
 
   private final AnalysisResultService analysisResultService;
   private final CoverageAnalysisService coverageAnalysisService;
 
   @PostMapping
-  @Operation(summary = "약관 분석 시작", description = "동일한 문서에 대한 중복 요청은 기존 분석 작업을 반환합니다.")
+  @Operation(
+      summary = "보험 문서 분석 시작 (약관용)",
+      description =
+          """
+          **증권은 이 API를 호출할 필요가 없습니다.** 업로드 시점에 분석이 자동으로 시작됩니다.
+
+          증권 분석 결과에 필요한 약관을 DB에서 찾지 못해 사용자에게 받아 올린 경우, 그 약관의 분석을 시작할 때 씁니다.
+
+          동일한 문서에 대한 중복 요청은 기존 분석 작업을 그대로 반환합니다. 재분석은 일어나지 않습니다.
+          """)
   public ResponseEntity<AnalysisResponse> startAnalysis(
       @AuthenticationPrincipal UUID userId,
       @PathVariable UUID tripId,
@@ -39,7 +48,7 @@ public class AnalysisResultController {
   }
 
   @GetMapping
-  @Operation(summary = "약관 분석 상태 및 결과 조회")
+  @Operation(summary = "보험 문서 분석 상태 및 결과 조회")
   public AnalysisResponse getAnalysis(
       @AuthenticationPrincipal UUID userId,
       @PathVariable UUID tripId,

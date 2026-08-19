@@ -35,27 +35,20 @@ public class TripController {
   private final TripService tripService;
   private final TripRegistrationService tripRegistrationService;
 
-  @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-  @Operation(
-      summary = "여행 세션 생성 (약관 없이)",
-      description = "여행 정보만으로 세션을 만듭니다. 약관은 이후 문서 업로드 API로 따로 올립니다.")
-  public ResponseEntity<TripResponse> createTrip(
-      @AuthenticationPrincipal UUID userId, @Valid @RequestBody TripCreateRequest request) {
-    TripResponse response = tripService.createTrip(userId, request);
-    return ResponseEntity.created(URI.create("/api/v1/trips/" + response.id())).body(response);
-  }
-
+  // 여행 생성은 이 엔드포인트 하나뿐이다. 증권 없는 여행은 분석할 대상이 없는 빈 레코드라
+  // JSON 전용 생성 API를 두지 않는다. 문서를 추가로 올릴 때는 문서 업로드 API를 쓴다.
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @Operation(
-      summary = "여행 세션 생성 + 약관 업로드",
+      summary = "여행 세션 생성 + 보험 문서 업로드",
       description =
           """
-          한 화면에서 약관 파일과 여행 정보를 함께 입력받아 한 번의 요청으로 처리합니다.
-          두 작업은 같은 트랜잭션이라 약관 저장이 실패하면 여행도 만들어지지 않습니다.
+          한 화면에서 문서 파일과 여행 정보를 함께 입력받아 한 번의 요청으로 처리합니다.
+          두 작업은 같은 트랜잭션이라 문서 저장이 실패하면 여행도 만들어지지 않습니다.
 
           multipart 파트 구성:
           - `trip` : 여행 정보 JSON. 이 파트의 Content-Type을 `application/json` 으로 지정해야 합니다.
-          - `file` : 약관 PDF 파일
+            파일 종류는 이 JSON 의 `documentKind` 필드로 지정하며, 생략하면 `CERTIFICATE`(증권) 입니다.
+          - `file` : 업로드할 PDF 파일
 
           응답의 trip.id 와 document.id 로 이어서 분석 시작 API를 호출합니다.
           """)

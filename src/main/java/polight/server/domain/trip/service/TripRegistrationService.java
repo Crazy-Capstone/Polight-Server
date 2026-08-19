@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import polight.server.domain.analysis.dto.AnalysisResponse;
+import polight.server.domain.analysis.service.CertificateAnalysisStarter;
 import polight.server.domain.insurance.dto.PolicyDocumentResponse;
 import polight.server.domain.insurance.service.PolicyDocumentService;
 import polight.server.domain.trip.dto.TripCreateRequest;
@@ -13,9 +15,9 @@ import polight.server.domain.trip.entity.Trip;
 import polight.server.domain.trip.mapper.TripMapper;
 
 /**
- * 여행 생성과 약관 업로드를 한 트랜잭션으로 묶는다.
+ * 여행 생성 · 보험 문서 업로드 · 증권 분석 시작을 한 트랜잭션으로 묶는다.
  *
- * <p>사용자는 한 화면에서 약관을 올리고 여행 정보를 입력한 뒤 한 번에 전송한다. 두 작업을 별도 요청으로 나누면 문서 업로드가 실패했을 때 여행만 남는다.
+ * <p>사용자는 한 화면에서 증권을 올리고 여행 정보를 입력한 뒤 한 번에 전송한다. 두 작업을 별도 요청으로 나누면 문서 업로드가 실패했을 때 여행만 남는다.
  *
  * <p>{@link PolicyDocumentService}가 이미 {@link TripService}를 의존하므로 TripService에서 문서 업로드를 호출하면 순환 의존이
  * 된다. 두 서비스를 함께 쓰는 조합 책임만 이 클래스가 맡는다.
@@ -27,13 +29,17 @@ public class TripRegistrationService {
 
   private final TripService tripService;
   private final PolicyDocumentService policyDocumentService;
+  private final CertificateAnalysisStarter certificateAnalysisStarter;
   private final TripMapper tripMapper;
 
   /**
-   * 여행을 만들고 그 여행에 약관 문서를 저장한다.
+   * 여행을 만들고 그 여행에 보험 문서를 저장한다. 올린 문서가 증권이면 분석까지 시작한다.
    *
    * <p>문서 저장이 실패하면 여행 생성도 함께 롤백된다. 단, 저장소(S3)에 이미 올라간 객체는 롤백 대상이 아니므로 버킷에 남는다. 고아 객체는 라이프사이클 규칙으로
    * 정리하는 것을 전제한다.
+   *
+   * <p>AI 서버 호출은 이 트랜잭션이 커밋된 뒤에 일어나므로(AFTER_COMMIT) AI 쪽 장애가 여행·문서 저장을 되돌리지는 않는다. 그 경우 분석만
+   * {@code FAILED}로 남는다.
    */
   @Transactional
   public TripWithDocumentResponse createTripWithDocument(
@@ -41,7 +47,9 @@ public class TripRegistrationService {
     Trip trip = tripService.createTripEntity(userId, tripRequest);
     PolicyDocumentResponse document =
         policyDocumentService.uploadDocumentTo(trip, file, tripRequest.documentKindOrDefault());
+    AnalysisResponse analysis =
+        certificateAnalysisStarter.startIfCertificate(userId, trip.getId(), document);
 
-    return new TripWithDocumentResponse(tripMapper.toResponse(trip), document);
+    return new TripWithDocumentResponse(tripMapper.toResponse(trip), document, analysis);
   }
 }

@@ -66,7 +66,7 @@ public class PolicyDocument extends BaseTimeEntity {
   /** 증권인지 약관인지. AI 서버에 분석을 요청할 때 documentType 으로 실어 보낸다. */
   @Enumerated(EnumType.STRING)
   @Column(name = "document_kind", nullable = false, length = 20)
-  private DocumentKind documentKind = DocumentKind.TERMS;
+  private DocumentKind documentKind = DocumentKind.CERTIFICATE;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "parse_status", nullable = false, length = 20)
@@ -94,7 +94,7 @@ public class PolicyDocument extends BaseTimeEntity {
     this.storedFilePath = storedFilePath;
     this.contentType = contentType;
     this.fileSize = fileSize;
-    this.documentKind = documentKind == null ? DocumentKind.TERMS : documentKind;
+    this.documentKind = documentKind == null ? DocumentKind.CERTIFICATE : documentKind;
     this.parseStatus = parseStatus == null ? DocumentParseStatus.UPLOADED : parseStatus;
     this.uploadedAt = uploadedAt;
   }
