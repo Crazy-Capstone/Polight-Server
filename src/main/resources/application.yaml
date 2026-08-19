@@ -14,7 +14,20 @@ spring:
   jpa:
     show-sql: true
     hibernate:
-      ddl-auto: update
+      # 스키마를 바꿀 수 있는 주체는 Flyway 하나다. Hibernate는 검증만 한다.
+      #
+      # update로 두면 Hibernate가 "엔티티에 있는데 DB에 없는 것"을 기동할 때마다 말없이
+      # 추가한다. 그러면 같은 스키마를 Flyway와 Hibernate가 각자 만들게 되고,
+      #   - 새 엔티티를 추가하면 마이그레이션이 돌기 전에 Hibernate가 테이블을 먼저 만들어
+      #     이후 마이그레이션이 "이미 존재한다"로 실패한다
+      #   - 제약 이름이 어긋나면 같은 컬럼에 UNIQUE가 하나 더 붙는다
+      #     (V1__baseline_schema.sql 헤더 주석이 이 문제로 이름을 고정해 둔 이유다)
+      #   - 어떤 컬럼이 어디서 생긴 것인지 추적할 수 없어, 마이그레이션 파일만으로
+      #     스키마를 재현할 수 없게 된다
+      #
+      # validate는 엔티티와 실제 스키마가 다르면 손대지 않고 기동을 실패시킨다.
+      # 대가로, 엔티티를 바꿀 때는 반드시 같은 PR에 마이그레이션을 함께 넣어야 한다.
+      ddl-auto: validate
     properties:
       hibernate:
         format_sql: true
@@ -23,8 +36,12 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    baseline-on-migrate: true
-    baseline-version: 0
+    # 이력 테이블 없이 테이블만 있는 DB를 만나면 그냥 멈춘다.
+    #
+    # true + baseline-version: 0 조합은 도움이 되지 않았다. 버전 0으로 baseline을 찍은 뒤
+    # V1부터 다시 적용하므로 "relation ... already exists"로 실패하는데, 이 메시지는 실제
+    # 원인(이력 테이블이 없다)을 가린다. false면 그 사실을 그대로 알려주고 멈춘다.
+    baseline-on-migrate: false
 
   docker:
     compose:
@@ -42,6 +59,11 @@ security:
     # security.jwt.secret 은 여기에 정의하지 않습니다.
     # SECURITY_JWT_SECRET 환경변수(.env / 배포 환경)로 주입해야 하며, 없으면 기동에 실패합니다.
     access-token-expiry-seconds: ${SECURITY_JWT_ACCESS_TOKEN_EXPIRY_SECONDS:3600}
+
+internal:
+  # AI 서버와 공유하는 시크릿. 양쪽이 같은 값을 쓴다.
+  # 미설정이면 /internal/** 요청을 전부 거부한다(InternalApiKeyFilter). 로컬 개발은 키 없이 그대로 된다.
+  api-key: ${INTERNAL_API_KEY:}
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
@@ -65,3 +87,14 @@ storage:
     bucket: ${S3_BUCKET}
     region: ${AWS_REGION:ap-northeast-2}
     key-prefix: ${S3_KEY_PREFIX:policy-documents}
+    # URL은 DB에 저장하지 않고 AI 분석 요청 직전에 object key로 생성한다.
+    presigned-get-expiry: ${S3_PRESIGNED_GET_EXPIRY:10m}
+
+ai:
+  server:
+    base-url: ${AI_SERVER_BASE_URL:http://localhost:8000}
+    analysis-path: ${AI_SERVER_ANALYSIS_PATH:/internal/analyses}
+    connect-timeout: ${AI_SERVER_CONNECT_TIMEOUT:3s}
+    read-timeout: ${AI_SERVER_READ_TIMEOUT:10s}
+    max-attempts: ${AI_SERVER_MAX_ATTEMPTS:3}
+    retry-delay: ${AI_SERVER_RETRY_DELAY:500ms}

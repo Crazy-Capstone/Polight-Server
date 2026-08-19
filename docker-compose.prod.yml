@@ -39,6 +39,10 @@ services:
 
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
 
+      # AI 서버와 공유하는 내부 API 키. 양쪽이 같은 값을 쓴다.
+      # 미설정이면 /internal/** 요청을 전부 거부하므로 AI 콜백이 401로 막힌다.
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
 
       KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY}
