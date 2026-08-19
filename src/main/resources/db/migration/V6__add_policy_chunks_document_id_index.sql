@@ -1,0 +1,11 @@
+-- policy_chunks 를 document_id 단독으로 조회할 때 쓸 인덱스.
+--
+-- 기존 인덱스는 (user_id, document_id) 복합이라 user_id 가 없는 조건에서는 쓰이지 않는다.
+-- 복합 인덱스는 선두 컬럼이 조건에 있어야 탐색을 시작할 수 있기 때문이다.
+--
+-- AI 서버의 청크 검색이 document_id 만으로 스코프를 좁힌다. 백엔드가 소유권을 확인한
+-- documentId 만 넘기므로 user_id 조건이 없어도 다른 사용자의 청크가 섞이지 않는다.
+--
+-- 사용자가 직접 올린 약관(3단계 분기의 마지막 경로)이 켜지면 이 경로로 검색이 돌기 시작한다.
+-- 그 전에 넣어둔다.
+CREATE INDEX idx_policy_chunks_document_id ON policy_chunks USING btree (document_id);

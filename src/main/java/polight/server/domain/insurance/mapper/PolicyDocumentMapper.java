@@ -4,6 +4,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 import polight.server.domain.insurance.dto.PolicyDocumentResponse;
+import polight.server.domain.insurance.entity.DocumentKind;
 import polight.server.domain.insurance.entity.PolicyDocument;
 import polight.server.domain.trip.entity.Trip;
 
@@ -17,7 +18,11 @@ public class PolicyDocumentMapper {
    * @param storedFilePath 저장소가 돌려준 위치. 로컬 경로일 수도, S3 키일 수도 있다.
    */
   public PolicyDocument toEntity(
-      Trip trip, MultipartFile file, String originalFilename, String storedFilePath) {
+      Trip trip,
+      MultipartFile file,
+      String originalFilename,
+      String storedFilePath,
+      DocumentKind documentKind) {
     return PolicyDocument.builder()
         .user(trip.getUser())
         .trip(trip)
@@ -25,6 +30,7 @@ public class PolicyDocumentMapper {
         .storedFilePath(storedFilePath)
         .contentType(file.getContentType())
         .fileSize(file.getSize())
+        .documentKind(documentKind)
         .build();
   }
 
@@ -35,6 +41,7 @@ public class PolicyDocumentMapper {
         document.getOriginalFilename(),
         document.getContentType(),
         document.getFileSize(),
+        document.getDocumentKind(),
         document.getParseStatus(),
         document.getUploadedAt());
   }

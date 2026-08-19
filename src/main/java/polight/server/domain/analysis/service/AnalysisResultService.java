@@ -34,7 +34,13 @@ public class AnalysisResultService {
     if (result == null) {
       result = analysisResultRepository.save(analysisMapper.toEntity(document));
       eventPublisher.publishEvent(
-          new AnalysisRequestedEvent(result.getId(), document.getStoredFilePath()));
+          new AnalysisRequestedEvent(
+              result.getId(),
+              userId,
+              tripId,
+              document.getId(),
+              document.getDocumentKind(),
+              document.getStoredFilePath()));
     }
 
     return analysisMapper.toResponse(result);

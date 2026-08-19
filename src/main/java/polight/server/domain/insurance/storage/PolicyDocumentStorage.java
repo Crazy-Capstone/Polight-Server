@@ -3,7 +3,7 @@ package polight.server.domain.insurance.storage;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 약관 파일의 실제 바이트를 보관하는 저장소.
+ * 보험 문서 파일의 실제 바이트를 보관하는 저장소.
  *
  * <p>구현체는 {@code storage.type} 설정으로 선택된다: 로컬 파일시스템({@code local}, 기본값) 또는 S3({@code s3}).
  */
