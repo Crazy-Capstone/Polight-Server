@@ -92,6 +92,15 @@ public class PolicyDocument extends BaseTimeEntity {
     this.uploadedAt = uploadedAt;
   }
 
+  /** 분석이 끝나 이 문서에서 더 뽑을 것이 없는 상태. AI 서버 콜백을 받아 전이한다. */
+  public void markParseCompleted() {
+    this.parseStatus = DocumentParseStatus.COMPLETED;
+  }
+
+  public void markParseFailed() {
+    this.parseStatus = DocumentParseStatus.FAILED;
+  }
+
   @PrePersist
   void prePersist() {
     if (uploadedAt == null) {

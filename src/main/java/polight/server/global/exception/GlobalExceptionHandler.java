@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -38,6 +39,21 @@ public class GlobalExceptionHandler {
 
     return ResponseEntity.status(ErrorCode.INVALID_INPUT.getStatus())
         .body(ErrorResponse.of(ErrorCode.INVALID_INPUT, fieldErrors));
+  }
+
+  /**
+   * 본문이 JSON으로 파싱되지 않는 경우.
+   *
+   * <p>이 핸들러가 없으면 맨 아래 {@code Exception} 핸들러가 받아 500이 된다. 하지만 읽을 수 없는 본문은 보낸 쪽의 문제이므로 400이 맞다.
+   * 특히 AI 서버 콜백은 실패 시 3회 재시도하므로, 5xx로 돌려주면 절대 성공할 수 없는 요청을 세 번 더 받게 된다.
+   */
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(
+      HttpMessageNotReadableException e) {
+    log.warn("요청 본문을 읽을 수 없습니다: {}", e.getMostSpecificCause().getMessage());
+
+    return ResponseEntity.status(ErrorCode.INVALID_INPUT.getStatus())
+        .body(ErrorResponse.of(ErrorCode.INVALID_INPUT));
   }
 
   /** 경로 변수·쿼리 파라미터 타입 불일치(예: UUID 자리에 잘못된 문자열). */

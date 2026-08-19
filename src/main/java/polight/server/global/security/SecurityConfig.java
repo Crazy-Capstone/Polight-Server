@@ -21,6 +21,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
+  private final InternalApiKeyFilter internalApiKeyFilter;
   private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
   private final RestAccessDeniedHandler restAccessDeniedHandler;
 
@@ -50,7 +51,10 @@ public class SecurityConfig {
                         "/swagger-ui/**",
                         "/v3/api-docs/**",
                         "/v3/api-docs.yaml",
-                        "/api/auth/**")
+                        "/api/auth/**",
+                        // AI 서버와의 서버 대 서버 구간. 사용자 토큰이 없으므로 JWT 인증에서 빼고,
+                        // InternalApiKeyFilter 가 X-Internal-Api-Key 로 대신 인증한다.
+                        "/internal/**")
                     .permitAll()
                     .anyRequest()
                     .authenticated())
@@ -59,7 +63,10 @@ public class SecurityConfig {
                 handler
                     .authenticationEntryPoint(restAuthenticationEntryPoint)
                     .accessDeniedHandler(restAccessDeniedHandler))
-        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        // 두 필터의 상대 순서는 무관하다. JWT 필터는 Authorization 헤더만 보고, 내부 키 필터는
+        // /internal/** 경로만 본다. 서로 건드리는 요청이 겹치지 않는다.
+        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+        .addFilterBefore(internalApiKeyFilter, UsernamePasswordAuthenticationFilter.class);
 
     return http.build();
   }
