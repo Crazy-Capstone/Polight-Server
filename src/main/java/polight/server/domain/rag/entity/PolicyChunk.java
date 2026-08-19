@@ -40,7 +40,10 @@ import polight.server.domain.user.entity.User;
     indexes = {
       @Index(name = "idx_policy_chunks_user_trip", columnList = "user_id,trip_id"),
       @Index(name = "idx_policy_chunks_user_policy", columnList = "user_id,policy_id"),
-      @Index(name = "idx_policy_chunks_user_document", columnList = "user_id,document_id")
+      @Index(name = "idx_policy_chunks_user_document", columnList = "user_id,document_id"),
+      // AI 서버는 document_id 만으로 스코프를 좁힌다. 위 복합 인덱스는 선두 컬럼(user_id)이
+      // 조건에 없으면 쓰이지 않아 단독 인덱스가 따로 필요하다.
+      @Index(name = "idx_policy_chunks_document_id", columnList = "document_id")
     })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PolicyChunk extends BaseTimeEntity {
