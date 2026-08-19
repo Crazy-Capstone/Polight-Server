@@ -76,6 +76,7 @@ public class AnalysisCallbackService {
         request.embeddingModel(),
         request.embeddingDimension(),
         request.accuracyScore(),
+        Boolean.TRUE.equals(request.coveragesComplete()),
         LocalDateTime.now());
     result.getDocument().markParseCompleted();
 

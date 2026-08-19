@@ -67,6 +67,14 @@ public class AnalysisResult extends BaseTimeEntity {
   @Column(name = "embedding_dimension")
   private Integer embeddingDimension;
 
+  /**
+   * 담보 목록이 증권의 보장내용 표 전체인지 여부. AI 서버가 콜백으로 알려준다.
+   *
+   * <p>false면 "목록에 없다"를 "가입하지 않았다"로 단정할 수 없다. 추출이 빠뜨린 것일 수 있다.
+   */
+  @Column(name = "coverages_complete", nullable = false)
+  private boolean coveragesComplete;
+
   @Column(name = "started_at", nullable = false)
   private LocalDateTime startedAt;
 
@@ -120,12 +128,14 @@ public class AnalysisResult extends BaseTimeEntity {
       String embeddingModel,
       Integer embeddingDimension,
       Float accuracyScore,
+      boolean coveragesComplete,
       LocalDateTime completedAt) {
     this.summary = summary;
     this.rawResultJson = rawResultJson;
     this.embeddingModel = embeddingModel;
     this.embeddingDimension = embeddingDimension;
     this.accuracyScore = accuracyScore;
+    this.coveragesComplete = coveragesComplete;
     markCompleted(completedAt);
   }
 

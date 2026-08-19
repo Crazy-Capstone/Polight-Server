@@ -27,7 +27,7 @@ public class OpenApiConfig {
             new Info()
                 .title("Polight API")
                 .version("v1")
-                .description("여행 보험 약관 분석 서비스 API 문서"))
+                .description("여행 보험 증권·약관 분석 서비스 API 문서"))
         .components(new Components().addSecuritySchemes(BEARER_SCHEME_NAME, bearerScheme))
         .addSecurityItem(new SecurityRequirement().addList(BEARER_SCHEME_NAME));
   }

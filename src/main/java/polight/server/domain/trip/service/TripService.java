@@ -26,16 +26,11 @@ public class TripService {
   private final UserService userService;
   private final TripMapper tripMapper;
 
-  @Transactional
-  public TripResponse createTrip(UUID userId, TripCreateRequest request) {
-    return tripMapper.toResponse(createTripEntity(userId, request));
-  }
-
   /**
    * 여행을 생성하고 엔티티를 돌려준다.
    *
-   * <p>같은 트랜잭션에서 여행과 약관 문서를 함께 만들 때, 방금 저장한 여행을 다시 조회하지 않고 그대로 넘기기 위해 사용한다. 응답 DTO가 필요하면 {@link
-   * #createTrip}을 쓴다.
+   * <p>같은 트랜잭션에서 여행과 보험 문서를 함께 만들 때, 방금 저장한 여행을 다시 조회하지 않고 그대로 넘기기 위해 사용한다. 여행 생성은 항상 문서 업로드와
+   * 묶이므로({@link TripRegistrationService}) DTO를 돌려주는 생성 메서드는 두지 않는다.
    */
   @Transactional
   public Trip createTripEntity(UUID userId, TripCreateRequest request) {

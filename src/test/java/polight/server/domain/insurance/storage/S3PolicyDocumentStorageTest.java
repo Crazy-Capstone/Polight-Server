@@ -60,7 +60,7 @@ class S3PolicyDocumentStorageTest {
     assertThatThrownBy(
             () -> storage.store(new MockMultipartFile("file", "x.pdf", null, "x".getBytes())))
         .isInstanceOf(BaseException.class)
-        .hasMessageContaining("약관 파일을 저장하지 못했습니다");
+        .hasMessageContaining("파일을 저장하지 못했습니다");
   }
 
   @Test
@@ -84,6 +84,6 @@ class S3PolicyDocumentStorageTest {
 
     assertThatThrownBy(() -> storage.store(unreadable))
         .isInstanceOf(BaseException.class)
-        .hasMessageContaining("약관 파일을 저장하지 못했습니다");
+        .hasMessageContaining("파일을 저장하지 못했습니다");
   }
 }
