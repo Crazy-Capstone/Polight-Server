@@ -37,9 +37,12 @@ public enum ErrorCode {
   EMPTY_POLICY_DOCUMENT_FILE(HttpStatus.BAD_REQUEST, "업로드할 약관 파일은 비어 있을 수 없습니다."),
   POLICY_DOCUMENT_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "업로드할 수 있는 파일 크기를 초과했습니다."),
   POLICY_DOCUMENT_STORAGE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "약관 파일을 저장하지 못했습니다."),
+  POLICY_DOCUMENT_URL_GENERATION_FAILED(
+      HttpStatus.INTERNAL_SERVER_ERROR, "약관 파일 다운로드 URL을 생성하지 못했습니다."),
 
   // 분석
-  ANALYSIS_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "분석 결과를 찾을 수 없습니다.");
+  ANALYSIS_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "분석 결과를 찾을 수 없습니다."),
+  AI_ANALYSIS_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "AI 서버에 분석을 요청하지 못했습니다.");
 
   private final HttpStatus status;
   private final String message;

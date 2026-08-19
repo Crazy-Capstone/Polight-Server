@@ -87,3 +87,14 @@ storage:
     bucket: ${S3_BUCKET}
     region: ${AWS_REGION:ap-northeast-2}
     key-prefix: ${S3_KEY_PREFIX:policy-documents}
+    # URL은 DB에 저장하지 않고 AI 분석 요청 직전에 object key로 생성한다.
+    presigned-get-expiry: ${S3_PRESIGNED_GET_EXPIRY:10m}
+
+ai:
+  server:
+    base-url: ${AI_SERVER_BASE_URL:http://localhost:8000}
+    analysis-path: ${AI_SERVER_ANALYSIS_PATH:/internal/analyses}
+    connect-timeout: ${AI_SERVER_CONNECT_TIMEOUT:3s}
+    read-timeout: ${AI_SERVER_READ_TIMEOUT:10s}
+    max-attempts: ${AI_SERVER_MAX_ATTEMPTS:3}
+    retry-delay: ${AI_SERVER_RETRY_DELAY:500ms}

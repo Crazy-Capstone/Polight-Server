@@ -2,10 +2,12 @@ package polight.server.domain.analysis.service;
 
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import polight.server.domain.analysis.dto.AnalysisResponse;
 import polight.server.domain.analysis.entity.AnalysisResult;
+import polight.server.domain.analysis.event.AnalysisRequestedEvent;
 import polight.server.domain.analysis.mapper.AnalysisMapper;
 import polight.server.domain.analysis.repository.AnalysisResultRepository;
 import polight.server.domain.insurance.entity.PolicyDocument;
@@ -21,16 +23,19 @@ public class AnalysisResultService {
   private final AnalysisResultRepository analysisResultRepository;
   private final AnalysisMapper analysisMapper;
   private final PolicyDocumentService policyDocumentService;
+  private final ApplicationEventPublisher eventPublisher;
 
   /** 분석을 시작한다. 같은 문서로 다시 요청하면 이미 만들어진 분석 작업을 그대로 돌려준다. */
   @Transactional
   public AnalysisResponse startAnalysis(UUID userId, UUID tripId, UUID documentId) {
     PolicyDocument document = policyDocumentService.getOwnedDocument(userId, tripId, documentId);
 
-    AnalysisResult result =
-        analysisResultRepository
-            .findOneByDocumentId(documentId)
-            .orElseGet(() -> analysisResultRepository.save(analysisMapper.toEntity(document)));
+    AnalysisResult result = analysisResultRepository.findOneByDocumentId(documentId).orElse(null);
+    if (result == null) {
+      result = analysisResultRepository.save(analysisMapper.toEntity(document));
+      eventPublisher.publishEvent(
+          new AnalysisRequestedEvent(result.getId(), document.getStoredFilePath()));
+    }
 
     return analysisMapper.toResponse(result);
   }
