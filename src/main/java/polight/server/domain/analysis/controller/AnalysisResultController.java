@@ -13,7 +13,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import polight.server.domain.analysis.dto.AnalysisResponse;
+import polight.server.domain.analysis.dto.CoverageAnalysisResponse;
 import polight.server.domain.analysis.service.AnalysisResultService;
+import polight.server.domain.analysis.service.CoverageAnalysisService;
 
 @RestController
 @RequiredArgsConstructor
@@ -22,6 +24,7 @@ import polight.server.domain.analysis.service.AnalysisResultService;
 public class AnalysisResultController {
 
   private final AnalysisResultService analysisResultService;
+  private final CoverageAnalysisService coverageAnalysisService;
 
   @PostMapping
   @Operation(summary = "약관 분석 시작", description = "동일한 문서에 대한 중복 요청은 기존 분석 작업을 반환합니다.")
@@ -42,5 +45,23 @@ public class AnalysisResultController {
       @PathVariable UUID tripId,
       @PathVariable UUID documentId) {
     return analysisResultService.getAnalysis(userId, tripId, documentId);
+  }
+
+  @GetMapping("/coverages")
+  @Operation(
+      summary = "보장 내역 조회",
+      description =
+          """
+          여행에 저장된 걱정되는 상황에 해당하는 담보를 목록 위로 올려 내려줍니다.
+
+          - `selectedConcerns[].covered` 가 false 이면 그 걱정에 해당하는 담보를 찾지 못한 것입니다.
+            `coveragesComplete` 가 false 인 동안에는 "가입하지 않았다"로 단정할 수 없습니다.
+          - `status` 가 COMPLETED 가 아니면 `coverages` 와 `selectedConcerns` 는 빈 목록입니다.
+          """)
+  public CoverageAnalysisResponse getCoverages(
+      @AuthenticationPrincipal UUID userId,
+      @PathVariable UUID tripId,
+      @PathVariable UUID documentId) {
+    return coverageAnalysisService.getCoverages(userId, tripId, documentId);
   }
 }
