@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import polight.server.domain.insurance.dto.PolicyDocumentResponse;
+import polight.server.domain.insurance.entity.DocumentKind;
 import polight.server.domain.insurance.entity.PolicyDocument;
 import polight.server.domain.insurance.mapper.PolicyDocumentMapper;
 import polight.server.domain.insurance.repository.PolicyDocumentRepository;
@@ -28,8 +29,9 @@ public class PolicyDocumentService {
   private final PolicyDocumentStorage policyDocumentStorage;
 
   @Transactional
-  public PolicyDocumentResponse uploadDocument(UUID userId, UUID tripId, MultipartFile file) {
-    return uploadDocumentTo(tripService.getOwnedTrip(userId, tripId), file);
+  public PolicyDocumentResponse uploadDocument(
+      UUID userId, UUID tripId, MultipartFile file, DocumentKind documentKind) {
+    return uploadDocumentTo(tripService.getOwnedTrip(userId, tripId), file, documentKind);
   }
 
   /**
@@ -38,7 +40,8 @@ public class PolicyDocumentService {
    * <p>여행과 문서를 한 요청으로 함께 만드는 흐름에서, 방금 생성한 여행 엔티티를 그대로 넘겨 받기 위해 분리했다.
    */
   @Transactional
-  public PolicyDocumentResponse uploadDocumentTo(Trip trip, MultipartFile file) {
+  public PolicyDocumentResponse uploadDocumentTo(
+      Trip trip, MultipartFile file, DocumentKind documentKind) {
     if (file.isEmpty()) {
       throw new BaseException(ErrorCode.EMPTY_POLICY_DOCUMENT_FILE);
     }
@@ -47,7 +50,7 @@ public class PolicyDocumentService {
     String storedFilePath = policyDocumentStorage.store(file);
 
     PolicyDocument document =
-        policyDocumentMapper.toEntity(trip, file, originalFilename, storedFilePath);
+        policyDocumentMapper.toEntity(trip, file, originalFilename, storedFilePath, documentKind);
     return policyDocumentMapper.toResponse(policyDocumentRepository.save(document));
   }
 

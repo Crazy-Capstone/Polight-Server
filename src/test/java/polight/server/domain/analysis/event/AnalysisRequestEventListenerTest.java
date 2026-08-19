@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import polight.server.domain.analysis.client.AiAnalysisClient;
 import polight.server.domain.analysis.dto.AiAnalysisRequest;
+import polight.server.domain.insurance.entity.DocumentKind;
 import polight.server.domain.analysis.service.AnalysisRequestFailureService;
 import polight.server.domain.insurance.storage.PolicyDocumentUrlProvider;
 
@@ -25,19 +26,30 @@ class AnalysisRequestEventListenerTest {
   @Test
   void createsUrlAtHandlingTimeAndPassesItWithAnalysisId() {
     UUID analysisId = UUID.randomUUID();
+    UUID userId = UUID.randomUUID();
+    UUID tripId = UUID.randomUUID();
+    UUID documentId = UUID.randomUUID();
     given(urlProvider.createDownloadUrl("policy-documents/key"))
         .willReturn(URI.create("https://example.com/presigned"));
     AnalysisRequestEventListener listener =
         new AnalysisRequestEventListener(urlProvider, aiAnalysisClient, failureService);
 
-    listener.requestAnalysis(new AnalysisRequestedEvent(analysisId, "policy-documents/key"));
+    listener.requestAnalysis(
+        new AnalysisRequestedEvent(
+            analysisId, userId, tripId, documentId, DocumentKind.CERTIFICATE, "policy-documents/key"));
 
     ArgumentCaptor<AiAnalysisRequest> request = ArgumentCaptor.forClass(AiAnalysisRequest.class);
     verify(aiAnalysisClient).requestAnalysis(request.capture());
     org.assertj.core.api.Assertions.assertThat(request.getValue().analysisResultId())
         .isEqualTo(analysisId);
-    org.assertj.core.api.Assertions.assertThat(request.getValue().documentUrl())
+    org.assertj.core.api.Assertions.assertThat(request.getValue().downloadUrl())
         .isEqualTo("https://example.com/presigned");
+    // AI 서버가 policy_chunks 를 채우려면 FK 값이 전부 있어야 한다.
+    org.assertj.core.api.Assertions.assertThat(request.getValue().userId()).isEqualTo(userId);
+    org.assertj.core.api.Assertions.assertThat(request.getValue().tripId()).isEqualTo(tripId);
+    org.assertj.core.api.Assertions.assertThat(request.getValue().documentId()).isEqualTo(documentId);
+    org.assertj.core.api.Assertions.assertThat(request.getValue().documentType())
+        .isEqualTo("CERTIFICATE");
   }
 
   @Test
@@ -47,7 +59,14 @@ class AnalysisRequestEventListenerTest {
     AnalysisRequestEventListener listener =
         new AnalysisRequestEventListener(urlProvider, aiAnalysisClient, failureService);
 
-    listener.requestAnalysis(new AnalysisRequestedEvent(analysisId, "key"));
+    listener.requestAnalysis(
+        new AnalysisRequestedEvent(
+            analysisId,
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            DocumentKind.TERMS,
+            "key"));
 
     verify(failureService).markFailed(analysisId, "AI 서버 분석 요청 전송 실패");
   }

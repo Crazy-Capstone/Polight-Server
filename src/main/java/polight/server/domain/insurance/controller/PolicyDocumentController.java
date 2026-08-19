@@ -17,7 +17,10 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import polight.server.domain.insurance.dto.PolicyDocumentResponse;
+import polight.server.domain.insurance.entity.DocumentKind;
 import polight.server.domain.insurance.service.PolicyDocumentService;
+import polight.server.global.exception.BaseException;
+import polight.server.global.exception.ErrorCode;
 
 @RestController
 @RequiredArgsConstructor
@@ -32,11 +35,25 @@ public class PolicyDocumentController {
   public ResponseEntity<PolicyDocumentResponse> uploadDocument(
       @AuthenticationPrincipal UUID userId,
       @PathVariable UUID tripId,
-      @RequestPart("file") MultipartFile file) {
-    PolicyDocumentResponse response = policyDocumentService.uploadDocument(userId, tripId, file);
+      @RequestPart("file") MultipartFile file,
+      @RequestPart(name = "documentKind", required = false) String documentKind) {
+    PolicyDocumentResponse response =
+        policyDocumentService.uploadDocument(userId, tripId, file, parseDocumentKind(documentKind));
     return ResponseEntity.created(
             URI.create("/api/v1/trips/" + tripId + "/documents/" + response.id()))
         .body(response);
+  }
+
+  /** 미지정이면 약관으로 본다. 증권을 올릴 때는 CERTIFICATE 를 명시해야 한다. */
+  private DocumentKind parseDocumentKind(String documentKind) {
+    if (documentKind == null || documentKind.isBlank()) {
+      return DocumentKind.TERMS;
+    }
+    try {
+      return DocumentKind.valueOf(documentKind.strip());
+    } catch (IllegalArgumentException exception) {
+      throw new BaseException(ErrorCode.INVALID_INPUT, exception);
+    }
   }
 
   @GetMapping

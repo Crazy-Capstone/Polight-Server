@@ -66,11 +66,17 @@ class FastApiAnalysisClientTest {
 
   private FastApiAnalysisClient client(RestClient restClient, int maxAttempts) {
     return new FastApiAnalysisClient(
-        restClient, "/internal/analyses", "internal-key", maxAttempts, Duration.ZERO);
+        restClient, "/internal/analysis", "internal-key", maxAttempts, Duration.ZERO);
   }
 
   private AiAnalysisRequest request() {
-    return new AiAnalysisRequest(UUID.randomUUID(), "https://example.com/presigned");
+    return new AiAnalysisRequest(
+        UUID.randomUUID(),
+        UUID.randomUUID(),
+        UUID.randomUUID(),
+        UUID.randomUUID(),
+        "https://example.com/presigned",
+        "CERTIFICATE");
   }
 
   private RestClient clientWith(ResponseFactory responseFactory) {

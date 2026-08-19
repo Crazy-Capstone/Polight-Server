@@ -39,7 +39,8 @@ public class TripRegistrationService {
   public TripWithDocumentResponse createTripWithDocument(
       UUID userId, TripCreateRequest tripRequest, MultipartFile file) {
     Trip trip = tripService.createTripEntity(userId, tripRequest);
-    PolicyDocumentResponse document = policyDocumentService.uploadDocumentTo(trip, file);
+    PolicyDocumentResponse document =
+        policyDocumentService.uploadDocumentTo(trip, file, tripRequest.documentKindOrDefault());
 
     return new TripWithDocumentResponse(tripMapper.toResponse(trip), document);
   }

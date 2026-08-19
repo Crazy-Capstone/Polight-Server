@@ -2,6 +2,7 @@ package polight.server.domain.insurance.dto;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import polight.server.domain.insurance.entity.DocumentKind;
 import polight.server.domain.insurance.entity.DocumentParseStatus;
 
 public record PolicyDocumentResponse(
@@ -10,6 +11,7 @@ public record PolicyDocumentResponse(
     String originalFilename,
     String contentType,
     Long fileSize,
+    DocumentKind documentKind,
     DocumentParseStatus parseStatus,
     LocalDateTime uploadedAt
 ) {}

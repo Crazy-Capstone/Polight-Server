@@ -28,7 +28,13 @@ public class AnalysisRequestEventListener {
     try {
       URI documentUrl = urlProvider.createDownloadUrl(event.objectKey());
       aiAnalysisClient.requestAnalysis(
-          new AiAnalysisRequest(event.analysisResultId(), documentUrl.toString()));
+          new AiAnalysisRequest(
+              event.analysisResultId(),
+              event.userId(),
+              event.tripId(),
+              event.documentId(),
+              documentUrl.toString(),
+              event.documentKind().name()));
     } catch (RuntimeException exception) {
       log.error("AI 분석 요청 최종 실패: analysisResultId={}", event.analysisResultId(), exception);
       failureService.markFailed(event.analysisResultId(), "AI 서버 분석 요청 전송 실패");
