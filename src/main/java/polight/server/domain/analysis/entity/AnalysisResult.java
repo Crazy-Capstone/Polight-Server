@@ -107,6 +107,28 @@ public class AnalysisResult extends BaseTimeEntity {
     this.analyzedAt = analyzedAt;
   }
 
+  /**
+   * AI 서버 콜백으로 받은 산출물을 반영하고 완료로 표시한다.
+   *
+   * <p>{@code rawResultJson}에는 콜백 본문 전체를 넣는다. {@code insurerName}/{@code productName}처럼 아직
+   * 저장할 컬럼이 없는 필드가 유실되지 않게 하려는 것이다. 보험기간이 콜백에 실려 오면 여기서 꺼내 {@code policies}를
+   * 만들 수 있다.
+   */
+  public void completeWith(
+      String summary,
+      String rawResultJson,
+      String embeddingModel,
+      Integer embeddingDimension,
+      Float accuracyScore,
+      LocalDateTime completedAt) {
+    this.summary = summary;
+    this.rawResultJson = rawResultJson;
+    this.embeddingModel = embeddingModel;
+    this.embeddingDimension = embeddingDimension;
+    this.accuracyScore = accuracyScore;
+    markCompleted(completedAt);
+  }
+
   public void markCompleted(LocalDateTime completedAt) {
     this.status = AnalysisStatus.COMPLETED;
     this.completedAt = completedAt == null ? LocalDateTime.now() : completedAt;

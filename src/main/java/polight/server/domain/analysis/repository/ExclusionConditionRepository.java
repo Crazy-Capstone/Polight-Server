@@ -1,5 +1,6 @@
 package polight.server.domain.analysis.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,4 +16,6 @@ public interface ExclusionConditionRepository extends JpaRepository<ExclusionCon
 
   List<ExclusionCondition> findByCoverageItemIdAndSeverityOrderBySortOrderAsc(
       UUID coverageItemId, ExclusionConditionSeverity severity);
+
+  void deleteByCoverageItemIdIn(Collection<UUID> coverageItemIds);
 }

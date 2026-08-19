@@ -1,5 +1,6 @@
 package polight.server.domain.rag.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,4 +17,7 @@ public interface CoverageItemSourceRepository extends JpaRepository<CoverageItem
 
   boolean existsByCoverageItemIdAndPolicyChunkIdAndSourceRole(
       UUID coverageItemId, UUID policyChunkId, CoverageItemSourceRole sourceRole);
+
+  /** 담보를 지우기 전에 이 테이블부터 비워야 한다. policy_chunk_id 쪽 FK 때문에 순서가 강제된다. */
+  void deleteByCoverageItemIdIn(Collection<UUID> coverageItemIds);
 }
