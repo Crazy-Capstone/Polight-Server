@@ -348,7 +348,16 @@ POST /api/v1/trips/{tripId}/documents/{documentId}/analysis
 
 **요청 본문 없음.**
 
-**멱등적입니다** — 같은 문서로 다시 호출하면 새 분석을 만들지 않고 기존 분석 작업을 그대로 돌려줍니다(항상 201).
+**상태에 따라 동작이 다릅니다** (항상 201).
+
+| 기존 분석 상태 | 동작 |
+| --- | --- |
+| 없음 | 새 분석을 만들고 AI 서버에 요청 |
+| `PROCESSING` | 아무것도 하지 않고 진행 중인 분석을 그대로 반환 |
+| `COMPLETED` | 아무것도 하지 않고 완료된 분석을 그대로 반환 |
+| `FAILED` | **같은 분석을 다시 시작합니다.** `status`가 `PROCESSING`으로, `failureReason`이 `null`로 돌아갑니다 |
+
+> **분석이 실패했을 때 문서를 다시 업로드하지 마세요.** 원문 파일은 S3에 그대로 있으므로 같은 `documentId`로 이 API를 다시 호출하면 재시도됩니다. 재업로드는 쓰지 않는 문서 레코드만 늘립니다.
 
 **201 Created** — 응답 헤더 `Location: /api/v1/trips/{tripId}/documents/{documentId}/analysis`
 
@@ -391,6 +400,10 @@ GET /api/v1/trips/{tripId}/documents/{documentId}/analysis
 > ⚠️ **분석을 시작하기 전에 조회하면 `ANALYSIS_RESULT_NOT_FOUND`(404)** 입니다. 반드시 POST를 먼저 호출하세요.
 >
 > **폴링 방식**: 분석 완료 알림(WebSocket/SSE)은 없습니다. POST 후 이 엔드포인트를 폴링(예: 3~5초 간격)하며 `status`가 `COMPLETED` 또는 `FAILED`가 될 때까지 기다리는 방식으로 구현하세요.
+>
+> **폴링은 반드시 끝납니다.** AI 서버가 콜백을 보내지 않아도 서버가 제한 시간(기본 10분, `ANALYSIS_TIMEOUT_AFTER`) 이 지난 분석을 `FAILED`로 내립니다. `failureReason`은 `AI 서버 응답 시간 초과 (10분)`입니다. `PROCESSING`이 무한히 유지되는 경우는 없으니 프론트엔드에 별도 타임아웃을 두지 않아도 됩니다.
+>
+> `FAILED`를 받으면 사용자에게 재시도 버튼을 노출하고, 누르면 **3.8을 같은 `documentId`로 다시 호출**하세요.
 
 ---
 
@@ -441,7 +454,9 @@ GET /api/v1/trips/{tripId}/documents/{documentId}/analysis
 | 여행/문서 삭제 | 없음 |
 | 문서 단건 조회·다운로드 | 없음 |
 | 페이지네이션 | 목록 API 모두 전체 반환 |
-| 분석 상세 결과(보장 항목·면책 조건) | 엔티티는 있으나 **응답 DTO에 미포함**. 현재 노출은 `summary` 문자열뿐 |
-| 실제 분석 파이프라인 | 미구현. `status`는 `PROCESSING`에서 자동으로 변하지 않음 |
+| 분석 상세 결과(보장 항목·면책 조건) | `GET .../analysis/coverages` 로 제공. `GET .../analysis` 응답에는 `summary` 문자열만 들어감 |
+| 실제 분석 파이프라인 | **구현됨.** 증권 업로드 → AI 서버 요청 → 콜백 수신까지 동작하며 `status`가 자동으로 전이함 |
+| 분석 재시도 | `FAILED` 상태에서 3.8을 다시 호출하면 재시도됨. 재업로드 불필요 |
+| 분석 타임아웃 | 제한 시간(기본 10분)을 넘긴 `PROCESSING` 분석은 서버가 `FAILED`로 내림 |
 | 채팅 API | 미구현 |
 | 파일 타입 검증 | 미구현 (서버가 모든 확장자 허용) |

@@ -1,5 +1,6 @@
 package polight.server.domain.analysis.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,6 +19,14 @@ public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, 
   Optional<AnalysisResult> findOneByDocumentId(UUID documentId);
 
   Optional<AnalysisResult> findOneByDocumentIdAndStatus(UUID documentId, AnalysisStatus status);
+
+  /**
+   * 시작한 지 오래된 채 아직 끝나지 않은 분석. AI 서버가 콜백을 보내지 않은 것들을 찾는다.
+   *
+   * <p>{@code idx_analysis_results_status}가 status 단독 인덱스라 상태로 먼저 좁힌 뒤 시각을 비교한다.
+   */
+  List<AnalysisResult> findByStatusAndStartedAtBefore(
+      AnalysisStatus status, LocalDateTime startedAt);
 
   @Query(
       """

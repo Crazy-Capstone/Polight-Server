@@ -49,6 +49,10 @@ services:
 
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
 
+      # 콜백이 오지 않아 PROCESSING 에 멈춘 분석을 FAILED 로 내리기까지의 시간.
+      # 실제 분석 소요 시간을 보고 조정한다. 너무 짧으면 정상 분석을 실패로 죽인다.
+      ANALYSIS_TIMEOUT_AFTER: ${ANALYSIS_TIMEOUT_AFTER:-10m}
+
       KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY}
       KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
