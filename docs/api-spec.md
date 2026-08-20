@@ -93,8 +93,11 @@
 | 7 | GET | `/api/v1/trips/{tripId}/documents` | ✓ | 보험 문서 목록 |
 | 8 | POST | `/api/v1/trips/{tripId}/documents/{documentId}/analysis` | ✓ | 분석 시작 |
 | 9 | GET | `/api/v1/trips/{tripId}/documents/{documentId}/analysis` | ✓ | 분석 상태/결과 조회 |
+| 10 | POST | `/api/v1/trips/{tripId}/chat/messages` | ✓ | 챗봇에 질문하기 |
 
-> `/api/users`, `/api/chat-messages` 컨트롤러는 클래스만 존재하고 **엔드포인트가 아직 없습니다.**
+> `/api/users` 컨트롤러는 클래스만 존재하고 **엔드포인트가 아직 없습니다.**
+>
+> `GET /api/v1/trips/{tripId}/documents/{documentId}/analysis/coverages`(보장 내역 조회)는 구현돼 있으나 이 문서에 아직 정리되지 않았습니다.
 
 ---
 
@@ -410,6 +413,68 @@ GET /api/v1/trips/{tripId}/documents/{documentId}/analysis
 > 단, 이 보장은 서버의 타임아웃 처리가 켜져 있을 때만 성립합니다(`ANALYSIS_TIMEOUT_ENABLED`, 기본값 `true`). 껐다면 콜백이 오지 않는 분석은 `PROCESSING`에 그대로 남으므로, 그 환경을 대상으로 개발한다면 프론트엔드에도 자체 타임아웃이 필요합니다.
 >
 > `FAILED`를 받으면 사용자에게 재시도 버튼을 노출하고, 누르면 **3.8을 같은 `documentId`로 다시 호출**하세요.
+
+---
+
+### 3.10 챗봇에 질문하기
+
+```
+POST /api/v1/trips/{tripId}/chat/messages
+Content-Type: application/json
+```
+
+여행에 올린 약관을 근거로 답변합니다. 질문과 답변을 **서버가 저장하므로 프론트가 대화 이력을 들고 있을 필요가 없습니다.**
+
+**요청**
+
+```json
+{
+  "question": "항공편이 지연되면 보상되나요?"
+}
+```
+
+| 필드 | 타입 | 필수 | 비고 |
+| --- | --- | --- | --- |
+| `question` | string | ✓ | 1~2000자. 공백만 보내면 `INVALID_INPUT`(400) |
+
+**200 OK**
+
+```json
+{
+  "sessionId": "9f1c...",
+  "messageId": "3ab7...",
+  "answer": "4시간 이상 지연 시 지연비용 특약으로 보상됩니다. 다만 …",
+  "responseType": "TEXT",
+  "sources": [
+    {
+      "chunkId": "11111111-…",
+      "documentId": "22222222-…",
+      "sectionTitle": "제3관 배상책임 특별약관",
+      "clausePath": "제3관 > 제12조",
+      "pageStart": 12,
+      "pageEnd": 12,
+      "quote": "항공기 지연으로 인하여 …"
+    }
+  ]
+}
+```
+
+**에러**: `AUTHENTICATION_REQUIRED`(401), `INVALID_INPUT`(400), `TRIP_NOT_FOUND`(404), `AI_CHAT_REQUEST_FAILED`(502)
+
+#### 프론트가 알아야 할 것
+
+- **세션을 만들거나 고르는 호출이 없습니다.** 대화 세션은 여행당 하나이고, 첫 질문에 서버가 자동으로 만들어 이후 재사용합니다. 응답의 `sessionId`는 참고용이며 다음 요청에 실어 보내지 않아도 됩니다.
+- **대화 이력을 보낼 필요가 없습니다.** 서버가 직전 6개(3턴)를 잘라 AI에 전달합니다.
+- **검색 범위는 여행 전체**입니다. 그 여행에 올린 약관이 모두 대상이며, 문서를 지정하는 파라미터는 없습니다.
+- `responseType`은 **현재 항상 `TEXT`** 입니다. 병원 카드 같은 카드형 응답은 표시할 데이터 출처가 아직 없어 내려가지 않습니다.
+- `sources`는 답변의 근거가 된 약관 원문입니다. 화면에 쓰지 않아도 되지만, 답변이 이상할 때 어느 조항을 보고 답했는지 확인할 수 있습니다. 빈 배열일 수 있습니다.
+- `sectionTitle`·`clausePath`·`pageStart`·`pageEnd`는 **비어 있을 수 있습니다.** 그때도 `quote`는 남습니다.
+
+> ⚠️ **응답까지 수 초 걸립니다.** 검색과 답변 생성을 기다리는 동기 호출이라 클라이언트 타임아웃을 넉넉히(60초 이상) 두세요. 완료 알림(WebSocket/SSE)은 없습니다.
+>
+> ⚠️ **502를 받아도 사용자가 보낸 질문은 서버에 저장돼 있습니다.** 화면에서 질문 말풍선을 지우지 말고, 재시도 버튼을 붙이는 쪽이 자연스럽습니다.
+>
+> ⚠️ **증권 분석이 끝나 있으면 답변 품질이 올라갑니다.** 가입 담보와 한도를 프롬프트에 함께 실어 보내기 때문입니다. 증권 분석이 없거나 진행 중이면 약관만 보고 답하므로, 가입하지 않은 담보를 물었을 때 "보상됩니다"라고 답할 수 있습니다.
 
 ---
 

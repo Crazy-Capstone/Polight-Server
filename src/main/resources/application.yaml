@@ -98,6 +98,16 @@ ai:
     analysis-path: ${AI_SERVER_ANALYSIS_PATH:/internal/analysis}
     connect-timeout: ${AI_SERVER_CONNECT_TIMEOUT:3s}
     read-timeout: ${AI_SERVER_READ_TIMEOUT:10s}
+
+    # 챗봇 질의는 분석 요청과 타임아웃이 다르다. 분석 요청은 AI가 202만 돌려주고 끊으므로
+    # 10s로 충분하지만, 질의는 검색과 LLM 생성이 끝날 때까지 응답을 기다린다.
+    # read-timeout을 그대로 쓰면 정상 응답을 타임아웃으로 오인해 버린다.
+    rag-path: ${AI_SERVER_RAG_PATH:/internal/rag/query}
+    rag-read-timeout: ${AI_SERVER_RAG_READ_TIMEOUT:60s}
+
+    # 챗봇에 실어 보낼 대화 이력 길이. AI 서버와 6개(3턴)로 합의했다.
+    # 프롬프트 길이를 예측 가능하게 두기 위한 값이라 양쪽이 같이 움직여야 한다.
+    chat-history-size: ${AI_SERVER_CHAT_HISTORY_SIZE:6}
     max-attempts: ${AI_SERVER_MAX_ATTEMPTS:3}
     retry-delay: ${AI_SERVER_RETRY_DELAY:500ms}
 
