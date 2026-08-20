@@ -289,7 +289,7 @@ Content-Type: multipart/form-data
 | `file` | binary | ✓ | 업로드할 PDF 파일 |
 | `documentKind` | string | ✕ | `CERTIFICATE` \| `TERMS`. **생략하면 `CERTIFICATE`(증권)** |
 
-- 파일 크기 제한: **Spring 기본값 — 파일당 1MB, 요청당 10MB** (별도 설정 없음). 초과 시 `POLICY_DOCUMENT_TOO_LARGE`(413).
+- 파일 크기 제한: **파일당 30MB, 요청당 35MB** (`application.yaml` 기본값. 배포 환경에서 `MULTIPART_MAX_FILE_SIZE` / `MULTIPART_MAX_REQUEST_SIZE`로 조정). 초과 시 `POLICY_DOCUMENT_TOO_LARGE`(413).
 - **확장자/MIME 타입 검증은 현재 없습니다.** 어떤 파일이든 업로드됩니다. 프론트에서 `accept="application/pdf"` 등으로 1차 제한을 걸어 주세요.
 - 원본 파일명은 255자를 넘으면 뒤 255자만 저장되고, 비어 있으면 `"policy-document"`로 대체됩니다.
 - 같은 파일을 여러 번 올리면 **매번 별개의 문서로 생성**됩니다(중복 검사 없음).
@@ -320,7 +320,7 @@ Content-Type: multipart/form-data
 }
 ```
 
-**에러**: `EMPTY_POLICY_DOCUMENT_FILE`(400), `AUTHENTICATION_REQUIRED`(401), `TRIP_NOT_FOUND`(404), `POLICY_DOCUMENT_TOO_LARGE`(413), `POLICY_DOCUMENT_STORAGE_FAILED`(500)
+**에러**: `INVALID_INPUT`(400), `EMPTY_POLICY_DOCUMENT_FILE`(400), `AUTHENTICATION_REQUIRED`(401), `TRIP_NOT_FOUND`(404), `POLICY_DOCUMENT_TOO_LARGE`(413), `POLICY_DOCUMENT_STORAGE_FAILED`(500)
 
 > 📌 `multipart/form-data` 요청 시 `Content-Type` 헤더를 **직접 지정하지 마세요.** boundary가 깨집니다. `FormData`만 넘기면 브라우저가 알아서 설정합니다.
 
