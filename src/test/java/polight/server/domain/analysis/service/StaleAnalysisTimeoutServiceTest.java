@@ -52,6 +52,59 @@ class StaleAnalysisTimeoutServiceTest {
   }
 
   @Test
+  void 조회_후_완료된_분석은_실패로_덮어쓰지_않는다() {
+    // 목록을 읽은 뒤 커밋 전에 완료 콜백이 도착한 상황. 여기서 markFailed 를 하면 담보까지 저장된
+    // 성공 결과가 실패로 보이고, 사용자가 이미 성공한 분석을 다시 돌린다.
+    PolicyDocument document = certificate();
+    AnalysisResult completed =
+        AnalysisResult.builder()
+            .document(document)
+            .startedAt(LocalDateTime.now().minusMinutes(30))
+            .build();
+    completed.markCompleted(LocalDateTime.now());
+    document.markParseCompleted();
+    given(
+            analysisResultRepository.findByStatusAndStartedAtBefore(
+                eq(AnalysisStatus.PROCESSING), any(LocalDateTime.class)))
+        .willReturn(List.of(completed));
+
+    int count = service().failTimedOutAnalyses();
+
+    assertThat(count).isZero();
+    assertThat(completed.getStatus()).isEqualTo(AnalysisStatus.COMPLETED);
+    assertThat(completed.getFailureReason()).isNull();
+    assertThat(document.getParseStatus()).isEqualTo(DocumentParseStatus.COMPLETED);
+  }
+
+  @Test
+  void 상태가_바뀐_건은_건너뛰고_남은_건만_실패로_내린다() {
+    PolicyDocument completedDocument = certificate();
+    AnalysisResult completed =
+        AnalysisResult.builder()
+            .document(completedDocument)
+            .startedAt(LocalDateTime.now().minusMinutes(30))
+            .build();
+    completed.markCompleted(LocalDateTime.now());
+
+    PolicyDocument staleDocument = certificate();
+    AnalysisResult stale =
+        AnalysisResult.builder()
+            .document(staleDocument)
+            .startedAt(LocalDateTime.now().minusMinutes(30))
+            .build();
+
+    given(
+            analysisResultRepository.findByStatusAndStartedAtBefore(
+                eq(AnalysisStatus.PROCESSING), any(LocalDateTime.class)))
+        .willReturn(List.of(completed, stale));
+
+    // 건너뛴 건은 세지 않는다. 반환값이 목록 크기면 실제로 내리지 않은 건까지 로그에 잡힌다.
+    assertThat(service().failTimedOutAnalyses()).isEqualTo(1);
+    assertThat(stale.getStatus()).isEqualTo(AnalysisStatus.FAILED);
+    assertThat(completed.getStatus()).isEqualTo(AnalysisStatus.COMPLETED);
+  }
+
+  @Test
   void 넘긴_분석이_없으면_아무것도_하지_않는다() {
     given(
             analysisResultRepository.findByStatusAndStartedAtBefore(

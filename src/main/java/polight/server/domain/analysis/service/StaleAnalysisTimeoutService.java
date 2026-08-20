@@ -56,15 +56,30 @@ public class StaleAnalysisTimeoutService {
     }
 
     String reason = "AI 서버 응답 시간 초과 (" + timeoutAfter.toMinutes() + "분)";
+    int failed = 0;
     for (AnalysisResult result : staleResults) {
+      // 조회 시점 이후에 끝난 분석은 건드리지 않는다. 완료된 분석을 실패로 덮어쓰면 담보까지 저장된
+      // 성공 결과가 실패로 보이고, 사용자가 이미 성공한 분석을 다시 돌리게 된다.
+      //
+      // PostgreSQL 에서는 FOR UPDATE 가 조건을 재평가해 이런 행이 애초에 목록에 없다. 이 확인은
+      // 그 동작에 기대지 않기 위한 것이다.
+      if (result.getStatus() != AnalysisStatus.PROCESSING) {
+        log.info(
+            "조회 후 상태가 바뀐 분석은 넘어갑니다: analysisResultId={}, status={}",
+            result.getId(),
+            result.getStatus());
+        continue;
+      }
+
       result.markFailed(reason, LocalDateTime.now());
       result.getDocument().markParseFailed();
+      failed++;
       log.warn(
           "응답 시간을 초과한 분석을 실패로 내립니다: analysisResultId={}, startedAt={}",
           result.getId(),
           result.getStartedAt());
     }
 
-    return staleResults.size();
+    return failed;
   }
 }
