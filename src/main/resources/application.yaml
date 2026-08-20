@@ -100,3 +100,14 @@ ai:
     read-timeout: ${AI_SERVER_READ_TIMEOUT:10s}
     max-attempts: ${AI_SERVER_MAX_ATTEMPTS:3}
     retry-delay: ${AI_SERVER_RETRY_DELAY:500ms}
+
+analysis:
+  timeout:
+    # AI 서버가 분석 요청은 정상으로 받고 콜백을 보내지 않으면 분석은 PROCESSING 에 영구히 머문다.
+    # 프론트엔드는 상태가 바뀔 때까지 폴링하므로 그 화면이 끝나지 않는다. 이 시간이 지난 분석은 FAILED 로
+    # 내려 사용자가 상황을 알고 POST .../analysis 로 재시도할 수 있게 한다.
+    enabled: ${ANALYSIS_TIMEOUT_ENABLED:true}
+    after: ${ANALYSIS_TIMEOUT_AFTER:10m}
+    # check-interval 만 ISO-8601 인 이유: @Scheduled 의 fixedDelayString 은 "PT1M" 또는 밀리초 숫자만
+    # 받는다. "1m" 은 파싱하지 못한다. after 는 Duration 으로 바인딩되므로 "10m" 이 그대로 통한다.
+    check-interval: ${ANALYSIS_TIMEOUT_CHECK_INTERVAL:PT1M}
