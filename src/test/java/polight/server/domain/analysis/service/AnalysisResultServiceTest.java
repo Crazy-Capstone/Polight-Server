@@ -61,7 +61,7 @@ class AnalysisResultServiceTest {
 
   @Test
   void 분석이_없으면_새로_만들고_요청_이벤트를_발행한다() {
-    given(analysisResultRepository.findOneByDocumentId(documentId)).willReturn(Optional.empty());
+    given(analysisResultRepository.findOneByDocumentIdForUpdate(documentId)).willReturn(Optional.empty());
     given(analysisResultRepository.save(any(AnalysisResult.class)))
         .willAnswer(invocation -> invocation.getArgument(0));
 
@@ -77,7 +77,7 @@ class AnalysisResultServiceTest {
     AnalysisResult failed = processingResult();
     failed.markFailed("AI 서버 분석 요청 전송 실패", LocalDateTime.now());
     document.markParseFailed();
-    given(analysisResultRepository.findOneByDocumentId(documentId)).willReturn(Optional.of(failed));
+    given(analysisResultRepository.findOneByDocumentIdForUpdate(documentId)).willReturn(Optional.of(failed));
 
     service.startAnalysis(userId, tripId, documentId);
 
@@ -95,7 +95,7 @@ class AnalysisResultServiceTest {
     AnalysisResult failed = processingResult();
     failed.completeWith("이전 요약", "{}", "text-embedding-3-small", 1536, 0.9f, true, LocalDateTime.now());
     failed.markFailed("두 번째 시도 실패", LocalDateTime.now());
-    given(analysisResultRepository.findOneByDocumentId(documentId)).willReturn(Optional.of(failed));
+    given(analysisResultRepository.findOneByDocumentIdForUpdate(documentId)).willReturn(Optional.of(failed));
 
     service.startAnalysis(userId, tripId, documentId);
 
@@ -107,7 +107,7 @@ class AnalysisResultServiceTest {
 
   @Test
   void 진행_중인_분석은_그대로_돌려주고_이벤트를_발행하지_않는다() {
-    given(analysisResultRepository.findOneByDocumentId(documentId))
+    given(analysisResultRepository.findOneByDocumentIdForUpdate(documentId))
         .willReturn(Optional.of(processingResult()));
 
     service.startAnalysis(userId, tripId, documentId);
@@ -120,7 +120,7 @@ class AnalysisResultServiceTest {
   void 완료된_분석은_다시_분석하지_않는다() {
     AnalysisResult completed = processingResult();
     completed.markCompleted(LocalDateTime.now());
-    given(analysisResultRepository.findOneByDocumentId(documentId))
+    given(analysisResultRepository.findOneByDocumentIdForUpdate(documentId))
         .willReturn(Optional.of(completed));
 
     service.startAnalysis(userId, tripId, documentId);

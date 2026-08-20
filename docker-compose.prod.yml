@@ -53,6 +53,10 @@ services:
       # 실제 분석 소요 시간을 보고 조정한다. 너무 짧으면 정상 분석을 실패로 죽인다.
       ANALYSIS_TIMEOUT_AFTER: ${ANALYSIS_TIMEOUT_AFTER:-10m}
 
+      # 위 타임아웃 처리 자체의 on/off. 끄면 콜백이 오지 않는 분석이 PROCESSING 에 영구히 남고
+      # 프론트엔드 폴링이 끝나지 않는다. 문제 상황을 관찰해야 할 때만 임시로 끈다.
+      ANALYSIS_TIMEOUT_ENABLED: ${ANALYSIS_TIMEOUT_ENABLED:-true}
+
       KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY}
       KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}

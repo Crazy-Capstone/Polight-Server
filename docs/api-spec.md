@@ -401,7 +401,9 @@ GET /api/v1/trips/{tripId}/documents/{documentId}/analysis
 >
 > **폴링 방식**: 분석 완료 알림(WebSocket/SSE)은 없습니다. POST 후 이 엔드포인트를 폴링(예: 3~5초 간격)하며 `status`가 `COMPLETED` 또는 `FAILED`가 될 때까지 기다리는 방식으로 구현하세요.
 >
-> **폴링은 반드시 끝납니다.** AI 서버가 콜백을 보내지 않아도 서버가 제한 시간(기본 10분, `ANALYSIS_TIMEOUT_AFTER`) 이 지난 분석을 `FAILED`로 내립니다. `failureReason`은 `AI 서버 응답 시간 초과 (10분)`입니다. `PROCESSING`이 무한히 유지되는 경우는 없으니 프론트엔드에 별도 타임아웃을 두지 않아도 됩니다.
+> **폴링은 반드시 끝납니다.** AI 서버가 콜백을 보내지 않아도 서버가 제한 시간(기본 10분, `ANALYSIS_TIMEOUT_AFTER`) 이 지난 분석을 `FAILED`로 내립니다. `failureReason`은 `AI 서버 응답 시간 초과 (10분)`입니다.
+>
+> 단, 이 보장은 서버의 타임아웃 처리가 켜져 있을 때만 성립합니다(`ANALYSIS_TIMEOUT_ENABLED`, 기본값 `true`). 껐다면 콜백이 오지 않는 분석은 `PROCESSING`에 그대로 남으므로, 그 환경을 대상으로 개발한다면 프론트엔드에도 자체 타임아웃이 필요합니다.
 >
 > `FAILED`를 받으면 사용자에게 재시도 버튼을 노출하고, 누르면 **3.8을 같은 `documentId`로 다시 호출**하세요.
 
