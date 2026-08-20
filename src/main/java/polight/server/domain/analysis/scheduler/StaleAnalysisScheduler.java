@@ -26,8 +26,9 @@ public class StaleAnalysisScheduler {
   /**
    * {@code fixedDelay}를 쓴다. 한 번의 실행이 길어져도 다음 실행이 겹치지 않는다.
    *
-   * <p>예외를 삼키는 이유: {@code @Scheduled} 메서드에서 예외가 올라가면 해당 작업이 더 이상 실행되지 않는다. DB가 일시적으로 끊긴 것 때문에
-   * 타임아웃 처리가 영구히 멈추면 안 된다.
+   * <p>예외를 여기서 잡는 이유. Spring 은 반복 작업에 {@code TaskUtils.LOG_AND_SUPPRESS_ERROR_HANDLER}
+   * 를 기본으로 붙이므로, 잡지 않아도 다음 주기는 계속 돈다. 스케줄이 멈출까 봐 잡는 것이 아니다. 무엇이 실패했는지 도메인 문맥이 담긴 메시지를 남기고, 한 주기의
+   * 실패가 전체를 멈추지 않는다는 의도를 프레임워크 기본 동작에 맡기지 않고 코드에 드러내기 위한 것이다.
    */
   @Scheduled(
       fixedDelayString = "${analysis.timeout.check-interval}",
