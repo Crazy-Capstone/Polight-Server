@@ -152,6 +152,27 @@ public class AnalysisResult extends BaseTimeEntity {
     this.failureReason = failureReason;
   }
 
+  /**
+   * 실패한 분석을 다시 시작할 수 있는 상태로 되돌린다.
+   *
+   * <p>문서당 분석 결과는 1건만 유지되므로(uk_analysis_results_document_id) 재시도는 새 행을 만드는 대신 이 행을 되돌리는 방식이어야
+   * 한다. 원문 파일은 S3에 그대로 있어 재업로드가 필요 없다.
+   *
+   * <p>앞선 시도의 산출물을 모두 비운다. 실패했던 분석의 요약이나 정확도가 남아 있으면 재시도 중인 분석의 값으로 오인된다. 담보 트리는 여기서 지우지 않는다 —
+   * 완료 콜백이 {@code replaceCoverageItems}로 통째로 교체하기 때문이다.
+   */
+  public void restart(LocalDateTime startedAt) {
+    this.status = AnalysisStatus.PROCESSING;
+    this.startedAt = startedAt == null ? LocalDateTime.now() : startedAt;
+    this.completedAt = null;
+    this.analyzedAt = null;
+    this.failureReason = null;
+    this.summary = null;
+    this.rawResultJson = null;
+    this.accuracyScore = null;
+    this.coveragesComplete = false;
+  }
+
   @PrePersist
   void prePersist() {
     if (startedAt == null) {

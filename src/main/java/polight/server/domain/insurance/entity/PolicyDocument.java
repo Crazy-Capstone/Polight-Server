@@ -108,6 +108,16 @@ public class PolicyDocument extends BaseTimeEntity {
     this.parseStatus = DocumentParseStatus.FAILED;
   }
 
+  /**
+   * 분석 재시도를 위해 업로드 직후 상태로 되돌린다.
+   *
+   * <p>{@code PROCESSING}이 아니라 {@code UPLOADED}로 돌리는 이유: 최초 분석이 진행되는 동안에도 이 값은 {@code UPLOADED}에
+   * 머문다. 재시도를 {@code PROCESSING}으로 두면 같은 상황의 문서가 최초 시도인지 재시도인지에 따라 다른 값을 갖게 된다.
+   */
+  public void markParseUploaded() {
+    this.parseStatus = DocumentParseStatus.UPLOADED;
+  }
+
   @PrePersist
   void prePersist() {
     if (uploadedAt == null) {
