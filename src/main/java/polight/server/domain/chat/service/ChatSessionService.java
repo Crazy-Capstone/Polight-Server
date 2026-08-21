@@ -1,5 +1,6 @@
 package polight.server.domain.chat.service;
 
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -50,6 +51,18 @@ public class ChatSessionService {
                         // trip_name 과 title 이 모두 varchar(100) 이라 잘릴 일은 없다.
                         .title(trip.getName())
                         .build()));
+  }
+
+  /**
+   * 여행의 세션을 찾는다. 없으면 비어 있다.
+   *
+   * <p>이력 조회에서 쓴다. 여행을 만들고 챗봇을 아직 열지 않은 상태가 정상이므로 없는 것을 오류로 보지 않는다. 여행 소유권은 여기서 확인하므로 남의 여행을
+   * 조회하면 {@code TRIP_NOT_FOUND}다.
+   */
+  public Optional<ChatSession> findSession(UUID userId, UUID tripId) {
+    tripService.getOwnedTrip(userId, tripId);
+
+    return chatSessionRepository.findByUserIdAndTripId(userId, tripId);
   }
 
   /** 이미 만들어진 세션을 돌려준다. 생성 경합에서 밀린 요청이 쓴다. */

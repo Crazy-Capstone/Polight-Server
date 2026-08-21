@@ -48,8 +48,16 @@ public class ChatMessageService {
    * <p>이 질문을 저장하기 전에 불러야 한다. 저장한 뒤에 부르면 방금 넣은 질문이 이력에 섞여 같은 문장이 두 번 프롬프트에 들어간다.
    */
   public List<ChatMessage> loadRecentHistory(UUID sessionId) {
-    return chatMessageRepository.findBySessionIdOrderByCreatedAtDesc(
-        sessionId, Limit.of(historySize));
+    return loadRecent(sessionId, historySize);
+  }
+
+  /**
+   * 세션의 최근 메시지를 개수만큼. 최신순으로 온다.
+   *
+   * <p>AI에 보낼 이력과 화면에 그릴 이력은 자르는 개수가 다르다. 전자는 프롬프트 길이를 맞추려고 6개로 고정하고, 후자는 사용자가 스크롤해 볼 만큼 필요하다.
+   */
+  public List<ChatMessage> loadRecent(UUID sessionId, int limit) {
+    return chatMessageRepository.findBySessionIdOrderByCreatedAtDesc(sessionId, Limit.of(limit));
   }
 
   /**

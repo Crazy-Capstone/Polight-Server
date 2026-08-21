@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import polight.server.domain.chat.dto.ChatAnswerResponse.SourceResponse;
+import polight.server.domain.chat.dto.ChatHistoryResponse.Message;
 import polight.server.domain.chat.dto.ChatMessageMetadata;
 import polight.server.domain.chat.dto.RagQueryRequest.HistoryTurn;
 import polight.server.domain.chat.dto.RagQueryResponse;
@@ -79,6 +80,48 @@ public class ChatMessageMapper {
         chunk.getPageStart(),
         chunk.getPageEnd(),
         source.quote());
+  }
+
+  /**
+   * 저장된 메시지를 화면용으로 바꾼다. 오래된 것부터 놓는다.
+   *
+   * <p>근거는 {@code metadata_json}에서 되꺼낸다. 질문·답변 응답과 같은 모양으로 내려주면 프론트가 두 경로를 다르게 다룰 필요가 없다.
+   */
+  public List<Message> toMessages(List<ChatMessage> recentFirst) {
+    List<ChatMessage> oldestFirst = new ArrayList<>(recentFirst);
+    Collections.reverse(oldestFirst);
+
+    return oldestFirst.stream().map(this::toMessage).toList();
+  }
+
+  private Message toMessage(ChatMessage message) {
+    return new Message(
+        message.getId(),
+        message.getSender(),
+        message.getContent(),
+        message.getResponseType(),
+        readSources(message.getMetadataJson()),
+        message.getCreatedAt());
+  }
+
+  /**
+   * 저장해 둔 근거를 되읽는다.
+   *
+   * <p>읽지 못해도 빈 목록으로 넘긴다. 근거는 부가 정보인데, 이것 때문에 대화 이력 전체가 열리지 않으면 사용자는 자기 대화를 볼 수 없게 된다.
+   */
+  private List<SourceResponse> readSources(String metadataJson) {
+    if (metadataJson == null || metadataJson.isBlank()) {
+      return List.of();
+    }
+
+    try {
+      ChatMessageMetadata metadata =
+          objectMapper.readValue(metadataJson, ChatMessageMetadata.class);
+      return metadata.sources() == null ? List.of() : metadata.sources();
+    } catch (JsonProcessingException exception) {
+      log.warn("대화 메타데이터를 읽지 못해 근거 없이 내려줍니다.", exception);
+      return List.of();
+    }
   }
 
   /**
