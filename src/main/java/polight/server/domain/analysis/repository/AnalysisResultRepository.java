@@ -80,4 +80,38 @@ public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, 
       """)
   List<AnalysisResult> findCompletedCertificateAnalyses(
       @Param("userId") UUID userId, @Param("tripId") UUID tripId);
+
+  /**
+   * 약관 연결이 비어 있는 완료된 증권 분석의 id. 오래된 것부터 온다.
+   *
+   * <p>약관 저장소가 생기기 전에 처리된 분석들이다. 백필이 이 목록을 돌며 뒤늦게 약관을 붙인다.
+   *
+   * <p><b>엔티티가 아니라 id만 읽는다.</b> 백필은 분석 하나마다 트랜잭션을 따로 열어야 하는데(한 건이 실패해도 나머지는 붙어야 한다), 목록을
+   * 읽은 트랜잭션에서 가져온 엔티티는 그 트랜잭션이 끝나면 준영속이 되어 변경이 저장되지 않는다.
+   */
+  @Query(
+      """
+      SELECT ar.id
+      FROM AnalysisResult ar
+      WHERE ar.document.documentKind = polight.server.domain.insurance.entity.DocumentKind.CERTIFICATE
+        AND ar.status = polight.server.domain.analysis.entity.AnalysisStatus.COMPLETED
+        AND ar.matchedTerms IS NULL
+      ORDER BY ar.completedAt ASC
+      """)
+  List<UUID> findCompletedCertificateIdsWithoutTerms();
+
+  /**
+   * 완료된 증권 분석의 id 전부. 오래된 것부터 온다.
+   *
+   * <p>이미 붙은 연결까지 다시 계산하는 백필이 쓴다. 약관을 새로 적재했거나 매칭 규칙을 고친 뒤, 예전 판단을 지금 기준으로 다시 내리는 경우다.
+   */
+  @Query(
+      """
+      SELECT ar.id
+      FROM AnalysisResult ar
+      WHERE ar.document.documentKind = polight.server.domain.insurance.entity.DocumentKind.CERTIFICATE
+        AND ar.status = polight.server.domain.analysis.entity.AnalysisStatus.COMPLETED
+      ORDER BY ar.completedAt ASC
+      """)
+  List<UUID> findCompletedCertificateIds();
 }
