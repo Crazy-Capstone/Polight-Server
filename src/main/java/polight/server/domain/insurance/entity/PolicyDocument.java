@@ -20,7 +20,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import polight.server.domain.common.entity.BaseTimeEntity;
-import polight.server.domain.policy.entity.Policy;
 import polight.server.domain.trip.entity.Trip;
 import polight.server.domain.user.entity.User;
 
@@ -29,8 +28,7 @@ import polight.server.domain.user.entity.User;
 @Table(
     name = "policy_documents",
     indexes = {
-      @Index(name = "idx_policy_documents_user_id", columnList = "user_id"),
-      @Index(name = "idx_policy_documents_policy_id", columnList = "policy_id")
+      @Index(name = "idx_policy_documents_user_id", columnList = "user_id")
     })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PolicyDocument extends BaseTimeEntity {
@@ -46,10 +44,6 @@ public class PolicyDocument extends BaseTimeEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "trip_id")
   private Trip trip;
-
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "policy_id")
-  private Policy policy;
 
   @Column(name = "original_filename", nullable = false, length = 255)
   private String originalFilename;
@@ -79,7 +73,6 @@ public class PolicyDocument extends BaseTimeEntity {
   public PolicyDocument(
       User user,
       Trip trip,
-      Policy policy,
       String originalFilename,
       String storedFilePath,
       String contentType,
@@ -89,7 +82,6 @@ public class PolicyDocument extends BaseTimeEntity {
       LocalDateTime uploadedAt) {
     this.user = user;
     this.trip = trip;
-    this.policy = policy;
     this.originalFilename = originalFilename;
     this.storedFilePath = storedFilePath;
     this.contentType = contentType;

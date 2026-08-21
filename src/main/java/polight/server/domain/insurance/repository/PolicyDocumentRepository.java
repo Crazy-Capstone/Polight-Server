@@ -10,8 +10,6 @@ public interface PolicyDocumentRepository extends JpaRepository<PolicyDocument, 
 
   List<PolicyDocument> findByUserId(UUID userId);
 
-  List<PolicyDocument> findByPolicyId(UUID policyId);
-
   List<PolicyDocument> findAllByTripIdAndUserIdOrderByUploadedAtDesc(UUID tripId, UUID userId);
 
   Optional<PolicyDocument> findByIdAndTripIdAndUserId(UUID id, UUID tripId, UUID userId);

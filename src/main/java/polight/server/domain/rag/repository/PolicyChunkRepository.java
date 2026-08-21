@@ -41,17 +41,6 @@ public interface PolicyChunkRepository extends JpaRepository<PolicyChunk, UUID> 
   List<PolicyChunk> findCompletedChunksByUserIdAndTripId(
       @Param("userId") UUID userId, @Param("tripId") UUID tripId);
 
-  @Query(
-      """
-      SELECT pc
-      FROM PolicyChunk pc
-      WHERE pc.user.id = :userId
-        AND pc.policy.id = :policyId
-        AND pc.analysisResult.status = polight.server.domain.analysis.entity.AnalysisStatus.COMPLETED
-      ORDER BY pc.analysisResult.completedAt DESC, pc.chunkIndex ASC
-      """)
-  List<PolicyChunk> findCompletedChunksByUserIdAndPolicyId(
-      @Param("userId") UUID userId, @Param("policyId") UUID policyId);
 
   @Query(
       """

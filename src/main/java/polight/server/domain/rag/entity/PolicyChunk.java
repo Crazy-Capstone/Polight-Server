@@ -25,7 +25,6 @@ import org.hibernate.type.SqlTypes;
 import polight.server.domain.analysis.entity.AnalysisResult;
 import polight.server.domain.common.entity.BaseTimeEntity;
 import polight.server.domain.insurance.entity.PolicyDocument;
-import polight.server.domain.policy.entity.Policy;
 import polight.server.domain.trip.entity.Trip;
 import polight.server.domain.user.entity.User;
 
@@ -39,7 +38,6 @@ import polight.server.domain.user.entity.User;
             columnNames = {"analysis_result_id", "chunk_index"}),
     indexes = {
       @Index(name = "idx_policy_chunks_user_trip", columnList = "user_id,trip_id"),
-      @Index(name = "idx_policy_chunks_user_policy", columnList = "user_id,policy_id"),
       @Index(name = "idx_policy_chunks_user_document", columnList = "user_id,document_id"),
       // AI 서버는 document_id 만으로 스코프를 좁힌다. 위 복합 인덱스는 선두 컬럼(user_id)이
       // 조건에 없으면 쓰이지 않아 단독 인덱스가 따로 필요하다.
@@ -65,10 +63,6 @@ public class PolicyChunk extends BaseTimeEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "trip_id")
   private Trip trip;
-
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "policy_id")
-  private Policy policy;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
   @JoinColumn(name = "document_id", nullable = false)
@@ -132,8 +126,7 @@ public class PolicyChunk extends BaseTimeEntity {
     this.analysisResult = Objects.requireNonNull(analysisResult, "analysisResult는 필수입니다.");
     this.document = Objects.requireNonNull(analysisResult.getDocument(), "analysisResult.document는 필수입니다.");
     this.user = Objects.requireNonNull(document.getUser(), "document.user는 필수입니다.");
-    this.policy = resolvePolicy(analysisResult);
-    this.trip = resolveTrip(analysisResult, policy);
+    this.trip = resolveTrip();
     this.chunkIndex = Objects.requireNonNull(chunkIndex, "chunkIndex는 필수입니다.");
     this.sourceContentType = sourceContentType == null ? PolicyChunkSourceContentType.TEXT : sourceContentType;
     this.pageStart = pageStart;
@@ -148,23 +141,13 @@ public class PolicyChunk extends BaseTimeEntity {
     this.charCount = charCount == null ? content.length() : charCount;
   }
 
-  private Policy resolvePolicy(AnalysisResult analysisResult) {
-    if (document.getPolicy() != null) {
-      return document.getPolicy();
-    }
-    return analysisResult.getPolicy();
-  }
-
-  private Trip resolveTrip(AnalysisResult analysisResult, Policy resolvedPolicy) {
-    if (document.getTrip() != null) {
-      return document.getTrip();
-    }
-    if (document.getPolicy() != null) {
-      return document.getPolicy().getTrip();
-    }
-    if (resolvedPolicy != null) {
-      return resolvedPolicy.getTrip();
-    }
-    return null;
+  /**
+   * 이 청크를 어느 여행의 것으로 볼지.
+   *
+   * <p>예전에는 문서 → 보험계약 → 여행 순으로 훑었다. {@code policies}를 없애면서 경로가 문서 하나로 줄었다. 어차피
+   * {@code policies}에는 행이 만들어진 적이 없어 그 경로는 늘 null을 돌려주고 있었다.
+   */
+  private Trip resolveTrip() {
+    return document.getTrip();
   }
 }

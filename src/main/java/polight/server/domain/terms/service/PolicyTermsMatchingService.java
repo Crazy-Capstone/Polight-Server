@@ -123,7 +123,7 @@ public class PolicyTermsMatchingService {
           TermsMatchStage.EXACT, productMatches.get(0), "보험사·상품명이 일치하는 약관이 하나입니다.");
     }
     if (productMatches.size() > 1) {
-      return selectRevision(productMatches, referenceDate(document));
+      return selectRevision(productMatches, referenceDate(analysisResult, document));
     }
 
     return matchByInsurerOnly(preferVerified(insurerMatches), insurerName, productName);
@@ -220,17 +220,20 @@ public class PolicyTermsMatchingService {
   }
 
   /**
-   * 어느 시점의 약관을 적용할지 판단하는 기준일. 여행 시작일을 쓴다.
+   * 어느 시점의 약관을 적용할지 판단하는 기준일.
    *
-   * <p>원래 기준이 되어야 할 것은 증권의 보험 시작일이다. 그런데 그 값이 지금 어디에도 없다 -- {@code policies} 행을 만드는 코드가 없고,
-   * 콜백에도 보험기간이 오지 않는다.
+   * <p>증권의 보험 시작일을 쓴다. 이 증권이 적용받는 개정판은 <b>가입 시점에 유효했던</b> 판이므로, 그 날짜가 곧 기준이다.
    *
-   * <p>여행 시작일은 그 대용으로 쓸 수 있다. 여행자보험의 보험기간은 여행 기간을 덮도록 가입하므로 여행 시작일은 보험기간 안에 있고, 그 날 유효했던
-   * 개정판이 곧 이 증권이 적용받는 개정판이다.
+   * <p>없으면 여행 시작일로 내려간다. 에이전트가 증권에서 보험기간을 읽지 못하는 경우가 있는데, 여행자보험의 보험기간은 여행 기간을 덮도록 가입하므로
+   * 여행 시작일도 보험기간 안에 있다. 정확한 가입일은 아니지만 같은 개정판을 가리킬 가능성이 높다.
    *
-   * <p>여행이 연결되지 않은 문서면 {@code null}이다. 그때는 {@link #selectRevision}이 최신 개정판을 고른다.
+   * <p>둘 다 없으면 {@code null}이다. 그때는 {@link #selectRevision}이 최신 개정판을 고르고, 추측이라는 사실을 근거 문구에
+   * 남긴다.
    */
-  private LocalDate referenceDate(PolicyDocument document) {
+  private LocalDate referenceDate(AnalysisResult analysisResult, PolicyDocument document) {
+    if (analysisResult.getInsuranceStartDate() != null) {
+      return analysisResult.getInsuranceStartDate();
+    }
     Trip trip = document.getTrip();
     return trip == null ? null : trip.getStartDate();
   }

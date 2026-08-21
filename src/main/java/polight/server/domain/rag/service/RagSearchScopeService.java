@@ -28,10 +28,6 @@ public class RagSearchScopeService {
     return policyChunkRepository.findCompletedChunksByUserIdAndTripId(userId, tripId);
   }
 
-  // 3. 특정 사용자가 가입한 특정 보험 계약 하나의 청크만 조회한다.
-  public List<PolicyChunk> findPolicyScopedChunks(UUID userId, UUID policyId) {
-    return policyChunkRepository.findCompletedChunksByUserIdAndPolicyId(userId, policyId);
-  }
 
   // 4. 특정 AnalysisResult에서 생성된 청크만 조회한다.
   public List<PolicyChunk> findAnalysisScopedChunks(UUID userId, UUID analysisResultId) {

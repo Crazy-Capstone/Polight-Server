@@ -11,7 +11,7 @@ public class AnalysisMapper {
 
   /** 문서에 대한 새 분석 작업을 만든다. 분석에 연결할 보험 계약은 문서가 이미 알고 있다. */
   public AnalysisResult toEntity(PolicyDocument document) {
-    return AnalysisResult.builder().document(document).policy(document.getPolicy()).build();
+    return AnalysisResult.builder().document(document).build();
   }
 
   public AnalysisResponse toResponse(AnalysisResult result) {

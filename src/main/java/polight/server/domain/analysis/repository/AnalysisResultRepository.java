@@ -16,8 +16,6 @@ public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, 
 
   List<AnalysisResult> findByDocumentId(UUID documentId);
 
-  List<AnalysisResult> findByPolicyId(UUID policyId);
-
   Optional<AnalysisResult> findOneByDocumentId(UUID documentId);
 
   Optional<AnalysisResult> findOneByDocumentIdAndStatus(UUID documentId, AnalysisStatus status);
@@ -63,15 +61,6 @@ public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, 
         AND ar.status = polight.server.domain.analysis.entity.AnalysisStatus.COMPLETED
       """)
   Optional<AnalysisResult> findCompletedByDocumentId(@Param("documentId") UUID documentId);
-
-  @Query(
-      """
-      SELECT ar
-      FROM AnalysisResult ar
-      WHERE ar.policy.id = :policyId
-        AND ar.status = polight.server.domain.analysis.entity.AnalysisStatus.COMPLETED
-      """)
-  List<AnalysisResult> findCompletedByPolicyId(@Param("policyId") UUID policyId);
 
   /**
    * 여행에 올린 증권의 완료된 분석을 최근 순으로 돌려준다.
