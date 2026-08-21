@@ -21,7 +21,7 @@ import java.util.UUID;
  * <p>{@code startDate}/{@code endDate}는 증권에서 읽은 보험기간이다. AI가 {@code YYYY-MM-DD}로 보낸다. 약관
  * 분석이거나 에이전트가 기간을 읽지 못하면 비어 있다.
  *
- * <p>원래 이 값을 받을 자리는 {@code policies}였다. 그 테이블을 만들지 않기로 하면서(V11) 보험기간이 사는 자리는
+ * <p>원래 이 값을 받을 자리는 {@code policies}였다. 그 테이블을 만들지 않기로 하면서(V12) 보험기간이 사는 자리는
  * {@code analysis_results}가 됐다. 쓰는 곳은 약관 개정판 선택이다 -- 같은 상품 약관이 여러 개정판으로 등록되어 있을 때
  * 이 증권이 적용받는 판을 고르는 기준일이다.
  *

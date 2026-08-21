@@ -1,5 +1,6 @@
 package polight.server.domain.rag.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -64,4 +65,7 @@ public interface PolicyChunkRepository extends JpaRepository<PolicyChunk, UUID> 
       """)
   List<PolicyChunk> findCompletedChunksByUserIdAndDocumentId(
       @Param("userId") UUID userId, @Param("documentId") UUID documentId);
+
+  /** 주어진 id 중 해당 사용자 소유인 청크만. 소유자 조건이 있어야 남의 청크 조회를 막을 수 있다. */
+  List<PolicyChunk> findByIdInAndUserId(Collection<UUID> ids, UUID userId);
 }
