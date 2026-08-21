@@ -4,6 +4,10 @@ services:
     container_name: polight-postgres
     restart: unless-stopped
 
+    # 같은 EC2 에 AI 컨테이너가 함께 뜨고, AI 배포는 호스트에서 직접 이미지를 빌드한다.
+    # 한도가 없으면 빌드 피크에 OOM Killer 가 개입할 때 희생 대상이 될 수 있다.
+    mem_limit: 512m
+
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -27,6 +31,16 @@ services:
     image: ${BACKEND_IMAGE:-054422645032.dkr.ecr.ap-northeast-2.amazonaws.com/polight/backend:latest}
     container_name: polight-backend
     restart: unless-stopped
+
+    # Dockerfile 의 -XX:MaxRAMPercentage=75.0 은 cgroup 한도를 읽는다.
+    # 한도가 없으면 JVM 이 호스트 전체(4GB)의 75% 를 자기 몫으로 계산해
+    # 힙을 3GB 까지 늘릴 수 있고, 한 번 늘린 힙은 거의 반납하지 않는다.
+    # 이 값을 지우면 AI 배포 시 빌드 피크와 겹쳐 백엔드가 OOM 으로 죽는다. (한도 1280m -> 힙 960m)
+    #
+    # 한도는 컨테이너 전체이고 힙은 그중 75% 다. 남는 320m 이 메타스페이스 / 코드 캐시 /
+    # 스레드 스택 / 다이렉트 버퍼 몫이다. 1g 로 줄이면 비힙이 256m 뿐이라
+    # 힙이 한도 아래인데도 cgroup 에 걸려 죽을 수 있다. 30MB 파일 업로드가 다이렉트 버퍼를 쓴다.
+    mem_limit: 1280m
 
     depends_on:
       postgres:
