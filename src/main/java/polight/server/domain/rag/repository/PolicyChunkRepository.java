@@ -14,6 +14,9 @@ public interface PolicyChunkRepository extends JpaRepository<PolicyChunk, UUID> 
 
   Optional<PolicyChunk> findByAnalysisResultIdAndChunkIndex(UUID analysisResultId, int chunkIndex);
 
+  /** 이 분석으로 색인된 조각이 하나라도 있는지. 조각을 만드는 주체는 AI 서버다. */
+  boolean existsByAnalysisResultId(UUID analysisResultId);
+
   //TODO : 쿼리 검토 필요
   @Query(
       """

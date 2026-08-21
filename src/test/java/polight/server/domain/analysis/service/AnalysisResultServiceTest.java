@@ -1,6 +1,7 @@
 package polight.server.domain.analysis.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -25,7 +26,10 @@ import polight.server.domain.analysis.repository.AnalysisResultRepository;
 import polight.server.domain.insurance.entity.DocumentKind;
 import polight.server.domain.insurance.entity.DocumentParseStatus;
 import polight.server.domain.insurance.entity.PolicyDocument;
+import polight.server.global.exception.BaseException;
+import polight.server.global.exception.ErrorCode;
 import polight.server.domain.insurance.service.PolicyDocumentService;
+import polight.server.domain.rag.service.PolicyChunkQueryService;
 import polight.server.domain.terms.entity.PolicyTerms;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,6 +39,7 @@ class AnalysisResultServiceTest {
 
   @Mock private AnalysisResultRepository analysisResultRepository;
   @Mock private PolicyDocumentService policyDocumentService;
+  @Mock private PolicyChunkQueryService policyChunkQueryService;
   @Mock private ApplicationEventPublisher eventPublisher;
 
   private AnalysisResultService service;
@@ -48,7 +53,11 @@ class AnalysisResultServiceTest {
     // 매퍼는 순수 변환이라 목이 아니라 실제 구현을 쓴다.
     service =
         new AnalysisResultService(
-            analysisResultRepository, new AnalysisMapper(), policyDocumentService, eventPublisher);
+            analysisResultRepository,
+            new AnalysisMapper(),
+            policyDocumentService,
+            policyChunkQueryService,
+            eventPublisher);
     userId = UUID.randomUUID();
     tripId = UUID.randomUUID();
     documentId = UUID.randomUUID();
@@ -136,6 +145,42 @@ class AnalysisResultServiceTest {
 
     verify(eventPublisher, never()).publishEvent(any(AnalysisRequestedEvent.class));
     assertThat(completed.getStatus()).isEqualTo(AnalysisStatus.COMPLETED);
+  }
+
+  @Test
+  void 색인된_조각이_남은_분석은_재시도를_거절한다() {
+    // AI 서버가 같은 analysis_result_id 로 chunk_index 0 부터 다시 넣으면
+    // uk_policy_chunks_analysis_chunk_index 위반으로 매번 실패한다. 조용히 재시도시키는 대신
+    // 재업로드가 필요하다고 알려준다.
+    AnalysisResult failed = processingResult();
+    failed.markFailed("약관 파싱 실패", LocalDateTime.now());
+    given(analysisResultRepository.findOneByDocumentIdForUpdate(documentId))
+        .willReturn(Optional.of(failed));
+    given(policyChunkQueryService.hasChunksFor(failed.getId())).willReturn(true);
+
+    assertThatThrownBy(() -> service.startAnalysis(userId, tripId, documentId))
+        .isInstanceOf(BaseException.class)
+        .extracting(exception -> ((BaseException) exception).getErrorCode())
+        .isEqualTo(ErrorCode.ANALYSIS_RETRY_NOT_SUPPORTED);
+
+    // 거절했으므로 상태를 되돌리지도, AI 요청을 보내지도 않는다.
+    assertThat(failed.getStatus()).isEqualTo(AnalysisStatus.FAILED);
+    verify(eventPublisher, never()).publishEvent(any(AnalysisRequestedEvent.class));
+  }
+
+  @Test
+  void 조각이_없으면_재시도를_허용한다() {
+    // 증권은 청킹을 하지 않으므로 항상 이쪽이다.
+    AnalysisResult failed = processingResult();
+    failed.markFailed("AI 서버 분석 요청 전송 실패", LocalDateTime.now());
+    given(analysisResultRepository.findOneByDocumentIdForUpdate(documentId))
+        .willReturn(Optional.of(failed));
+    given(policyChunkQueryService.hasChunksFor(failed.getId())).willReturn(false);
+
+    service.startAnalysis(userId, tripId, documentId);
+
+    assertThat(failed.getStatus()).isEqualTo(AnalysisStatus.PROCESSING);
+    assertThat(publishedEvent().objectKey()).isEqualTo(OBJECT_KEY);
   }
 
   private AnalysisResult processingResult() {

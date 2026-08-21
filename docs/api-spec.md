@@ -355,9 +355,13 @@ POST /api/v1/trips/{tripId}/documents/{documentId}/analysis
 | 없음 | 새 분석을 만들고 AI 서버에 요청 |
 | `PROCESSING` | 아무것도 하지 않고 진행 중인 분석을 그대로 반환 |
 | `COMPLETED` | 아무것도 하지 않고 완료된 분석을 그대로 반환 |
-| `FAILED` | **같은 분석을 다시 시작합니다.** `status`가 `PROCESSING`으로, `failureReason`이 `null`로 돌아갑니다 |
+| `FAILED` | **같은 분석을 다시 시작합니다.** `status`가 `PROCESSING`으로, `failureReason`이 `null`로 돌아갑니다. 단 아래 제약이 있습니다 |
 
 > **분석이 실패했을 때 문서를 다시 업로드하지 마세요.** 원문 파일은 S3에 그대로 있으므로 같은 `documentId`로 이 API를 다시 호출하면 재시도됩니다. 재업로드는 쓰지 않는 문서 레코드만 늘립니다.
+>
+> ⚠️ **예외 — 재시도할 수 없는 경우가 있습니다.** 약관 분석이 색인(청킹·임베딩)까지 진행된 뒤 실패했다면 재시도가 `409 ANALYSIS_RETRY_NOT_SUPPORTED`로 거절됩니다. AI 서버가 이전 색인을 지우는 기능이 아직 없어, 재시도하면 매번 같은 제약 위반으로 실패하기 때문입니다. 이 응답을 받으면 **문서를 새로 업로드**하도록 안내하세요.
+>
+> 증권은 색인을 만들지 않으므로 이 제약에 걸리지 않습니다. 증권 재시도는 항상 가능합니다.
 
 **201 Created** — 응답 헤더 `Location: /api/v1/trips/{tripId}/documents/{documentId}/analysis`
 
@@ -383,7 +387,7 @@ POST /api/v1/trips/{tripId}/documents/{documentId}/analysis
 }
 ```
 
-**에러**: `AUTHENTICATION_REQUIRED`(401), `TRIP_NOT_FOUND`(404), `POLICY_DOCUMENT_NOT_FOUND`(404)
+**에러**: `AUTHENTICATION_REQUIRED`(401), `TRIP_NOT_FOUND`(404), `POLICY_DOCUMENT_NOT_FOUND`(404), `ANALYSIS_RETRY_NOT_SUPPORTED`(409)
 
 ---
 
