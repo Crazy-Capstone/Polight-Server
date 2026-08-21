@@ -31,7 +31,7 @@ class TermsBackfillServiceTest {
         .willReturn(List.of(id));
     given(analysisTermsRelinker.relink(id, false)).willReturn(matched(id, 3, 2));
 
-    TermsBackfillSummary summary = service.backfill(false);
+    TermsBackfillSummary summary = service.backfill(TermsBackfillMode.MISSING_TERMS);
 
     // 이미 붙은 분석까지 건드리면 멀쩡한 연결이 끊길 수 있다. 기본값은 비어 있는 것만이다.
     verify(analysisResultRepository, never()).findCompletedCertificateIds();
@@ -42,12 +42,25 @@ class TermsBackfillServiceTest {
   }
 
   @Test
+  void relinksCoveragesOnEveryAnalysisWithoutTouchingTerms() {
+    UUID id = UUID.randomUUID();
+    given(analysisResultRepository.findCompletedCertificateIds()).willReturn(List.of(id));
+    given(analysisTermsRelinker.relink(id, false)).willReturn(matched(id, 3, 3));
+
+    service.backfill(TermsBackfillMode.RELINK_COVERAGES);
+
+    // 규칙을 새로 적재했거나 담보 매칭 단계를 늘린 뒤에 쓰는 경로다. 이미 붙은 약관은 그대로 둔다.
+    verify(analysisResultRepository, never()).findCompletedCertificateIdsWithoutTerms();
+    verify(analysisTermsRelinker).relink(id, false);
+  }
+
+  @Test
   void targetsEveryCompletedAnalysisWhenRematching() {
     UUID id = UUID.randomUUID();
     given(analysisResultRepository.findCompletedCertificateIds()).willReturn(List.of(id));
     given(analysisTermsRelinker.relink(id, true)).willReturn(matched(id, 1, 1));
 
-    service.backfill(true);
+    service.backfill(TermsBackfillMode.REMATCH);
 
     // 약관을 새로 적재했거나 매칭 규칙을 고친 뒤 예전 판단을 다시 내리는 경로다.
     verify(analysisResultRepository, never()).findCompletedCertificateIdsWithoutTerms();
@@ -63,7 +76,7 @@ class TermsBackfillServiceTest {
     given(analysisTermsRelinker.relink(matchedId, false)).willReturn(matched(matchedId, 2, 2));
     given(analysisTermsRelinker.relink(unmatchedId, false)).willReturn(unmatched(unmatchedId));
 
-    TermsBackfillSummary summary = service.backfill(false);
+    TermsBackfillSummary summary = service.backfill(TermsBackfillMode.MISSING_TERMS);
 
     // 약관을 못 찾는 것은 정상 갈래다. 그 상품 약관이 아직 없다는 뜻이지 백필이 깨진 것이 아니다.
     assertThat(summary.termsMatched()).isEqualTo(1);
@@ -81,7 +94,7 @@ class TermsBackfillServiceTest {
         .willThrow(new IllegalStateException("깨진 행"));
     given(analysisTermsRelinker.relink(healthy, false)).willReturn(matched(healthy, 4, 4));
 
-    TermsBackfillSummary summary = service.backfill(false);
+    TermsBackfillSummary summary = service.backfill(TermsBackfillMode.MISSING_TERMS);
 
     // 한 건의 문제로 멈추면 나머지 사용자는 계속 보장 상세를 못 본다.
     assertThat(summary.failedAnalysisIds()).containsExactly(broken);
@@ -93,7 +106,7 @@ class TermsBackfillServiceTest {
   void doesNothingWhenNoTargets() {
     given(analysisResultRepository.findCompletedCertificateIdsWithoutTerms()).willReturn(List.of());
 
-    TermsBackfillSummary summary = service.backfill(false);
+    TermsBackfillSummary summary = service.backfill(TermsBackfillMode.MISSING_TERMS);
 
     assertThat(summary.processed()).isZero();
     verify(analysisTermsRelinker, never()).relink(any(), anyBoolean());
@@ -101,7 +114,7 @@ class TermsBackfillServiceTest {
 
   private AnalysisTermsRelinkResult matched(UUID id, int total, int linked) {
     return new AnalysisTermsRelinkResult(
-        id, true, new CoverageTermsLinkSummary(total, linked, 0, List.of()));
+        id, true, new CoverageTermsLinkSummary(total, linked, 0, 0, List.of()));
   }
 
   private AnalysisTermsRelinkResult unmatched(UUID id) {

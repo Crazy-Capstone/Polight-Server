@@ -20,6 +20,7 @@ import polight.server.domain.insurance.entity.PolicyDocument;
 import polight.server.domain.terms.entity.PolicyTerms;
 import polight.server.domain.terms.entity.PolicyTermsCoverage;
 import polight.server.domain.terms.repository.PolicyTermsCoverageRepository;
+import polight.server.domain.terms.service.CoverageTermsLinkSummary.UnlinkedCoverage;
 
 @ExtendWith(MockitoExtension.class)
 class CoverageTermsLinkerTest {
@@ -83,9 +84,12 @@ class CoverageTermsLinkerTest {
     givenRules(rule("상해의료비", 0), rule("질병의료비", 1));
     CoverageItem item = item("해외여행중 상해의료비 및 질병의료비");
 
-    linker.link(analysis, List.of(item));
+    CoverageTermsLinkSummary summary = linker.link(analysis, List.of(item));
 
     assertThat(item.getTermsCoverage()).isNull();
+    assertThat(summary.unlinked())
+        .containsExactly(
+            new UnlinkedCoverage("해외여행중 상해의료비 및 질병의료비", CoverageTermsUnlinkReason.AMBIGUOUS_TITLE));
   }
 
   @Test
@@ -93,9 +97,11 @@ class CoverageTermsLinkerTest {
     givenRules(rule("상해의료비", 0), rule("상해 의료비", 1));
     CoverageItem item = item("상해의료비");
 
-    linker.link(analysis, List.of(item));
+    CoverageTermsLinkSummary summary = linker.link(analysis, List.of(item));
 
     assertThat(item.getTermsCoverage()).isNull();
+    assertThat(summary.unlinked())
+        .containsExactly(new UnlinkedCoverage("상해의료비", CoverageTermsUnlinkReason.AMBIGUOUS_TITLE));
   }
 
   @Test
@@ -118,7 +124,9 @@ class CoverageTermsLinkerTest {
     CoverageTermsLinkSummary summary = linker.link(analysis, List.of(item));
 
     assertThat(item.getTermsCoverage()).isNull();
-    assertThat(summary.unlinkedTitles()).containsExactly("항공기 지연 비용");
+    assertThat(summary.unlinked())
+        .containsExactly(
+            new UnlinkedCoverage("항공기 지연 비용", CoverageTermsUnlinkReason.NOT_FOUND));
     assertThat(summary.linked()).isZero();
   }
 
@@ -144,7 +152,8 @@ class CoverageTermsLinkerTest {
     CoverageTermsLinkSummary summary = linker.link(analysis, List.of(item));
 
     assertThat(item.getTermsCoverage()).isNull();
-    assertThat(summary.unlinkedTitles()).containsExactly("상해의료비");
+    assertThat(summary.unlinked())
+        .containsExactly(new UnlinkedCoverage("상해의료비", CoverageTermsUnlinkReason.NOT_FOUND));
   }
 
   @Test
@@ -166,7 +175,113 @@ class CoverageTermsLinkerTest {
     assertThat(summary.total()).isEqualTo(3);
     assertThat(summary.exact()).isEqualTo(1);
     assertThat(summary.qualified()).isEqualTo(1);
-    assertThat(summary.unlinkedTitles()).containsExactly("항공기 지연");
+    assertThat(summary.unlinked())
+        .containsExactly(new UnlinkedCoverage("항공기 지연", CoverageTermsUnlinkReason.NOT_FOUND));
+  }
+
+  @Test
+  void 이름이_겹치지_않아도_같은_분류_규칙이_하나면_붙인다() {
+    // 증권 "해외의료실비보장"과 약관 "기본형 해외여행 실손의료비"는 같은 보장인데 글자가 하나도
+    // 겹치지 않는다. 이름만으로는 영영 붙지 않는 케이스다.
+    PolicyTermsCoverage rule = rule("기본형 해외여행 실손의료비", 0, "medical_expense");
+    givenRules(rule);
+    CoverageItem item = item("해외의료실비보장", "medical_expense");
+
+    CoverageTermsLinkSummary summary = linker.link(analysis, List.of(item));
+
+    assertThat(item.getTermsCoverage()).isSameAs(rule);
+    assertThat(summary.category()).isEqualTo(1);
+    assertThat(summary.linked()).isEqualTo(1);
+  }
+
+  @Test
+  void 이름으로_붙었으면_분류는_보지_않는다() {
+    // 신뢰도 순서다. 이름이 맞는데 분류가 다른 규칙을 가리킬 이유가 없다.
+    PolicyTermsCoverage byTitle = rule("상해의료비", 0, "baggage");
+    givenRules(byTitle, rule("휴대품손해", 1, "medical_expense"));
+    CoverageItem item = item("상해의료비", "medical_expense");
+
+    CoverageTermsLinkSummary summary = linker.link(analysis, List.of(item));
+
+    assertThat(item.getTermsCoverage()).isSameAs(byTitle);
+    assertThat(summary.exact()).isEqualTo(1);
+    assertThat(summary.category()).isZero();
+  }
+
+  @Test
+  void 같은_분류_규칙이_둘_이상이면_붙이지_않는다() {
+    // category 는 여럿이 공유하라고 만든 값이라 이런 일이 정상적으로 생긴다. 하나를 고르면
+    // 상해 담보에 질병 조항의 면책이 붙는다.
+    givenRules(rule("상해의료비", 0, "medical_expense"), rule("질병의료비", 1, "medical_expense"));
+    CoverageItem item = item("해외의료실비보장", "medical_expense");
+
+    CoverageTermsLinkSummary summary = linker.link(analysis, List.of(item));
+
+    assertThat(item.getTermsCoverage()).isNull();
+    assertThat(summary.unlinked())
+        .containsExactly(
+            new UnlinkedCoverage("해외의료실비보장", CoverageTermsUnlinkReason.AMBIGUOUS_CATEGORY));
+  }
+
+  @Test
+  void 이름이_모호했으면_분류로_내려가지_않는다() {
+    // 이름으로 가리지 못한 것을 더 거친 분류로 가를 수는 없다. 그렇게 고른 하나는 동전 던지기다.
+    givenRules(rule("상해의료비", 0, "baggage"), rule("상해 의료비", 1, "medical_expense"));
+    CoverageItem item = item("상해의료비", "medical_expense");
+
+    CoverageTermsLinkSummary summary = linker.link(analysis, List.of(item));
+
+    assertThat(item.getTermsCoverage()).isNull();
+    assertThat(summary.unlinked())
+        .containsExactly(new UnlinkedCoverage("상해의료비", CoverageTermsUnlinkReason.AMBIGUOUS_TITLE));
+  }
+
+  @Test
+  void 담보에_분류가_없으면_이름에서_끝난다() {
+    // 약관 저장소가 생기기 전에 분석된 담보다. category 가 비어 있어도 앞 두 단계는 그대로 돈다.
+    givenRules(rule("기본형 해외여행 실손의료비", 0, "medical_expense"));
+    CoverageItem item = item("해외의료실비보장", null);
+
+    CoverageTermsLinkSummary summary = linker.link(analysis, List.of(item));
+
+    assertThat(item.getTermsCoverage()).isNull();
+    assertThat(summary.unlinked())
+        .containsExactly(new UnlinkedCoverage("해외의료실비보장", CoverageTermsUnlinkReason.NOT_FOUND));
+  }
+
+  @Test
+  void 규칙에_분류가_없으면_후보로_보지_않는다() {
+    givenRules(rule("기본형 해외여행 실손의료비", 0, null));
+    CoverageItem item = item("해외의료실비보장", "medical_expense");
+
+    linker.link(analysis, List.of(item));
+
+    assertThat(item.getTermsCoverage()).isNull();
+  }
+
+  @Test
+  void 표기가_달라도_같은_분류로_본다() {
+    // 한쪽이 대문자나 공백을 섞어 보내도 같은 값이다.
+    PolicyTermsCoverage rule = rule("기본형 해외여행 실손의료비", 0, " Medical_Expense ");
+    givenRules(rule);
+    CoverageItem item = item("해외의료실비보장", "medical_expense");
+
+    linker.link(analysis, List.of(item));
+
+    assertThat(item.getTermsCoverage()).isSameAs(rule);
+  }
+
+  @Test
+  void 합의한_어휘_밖의_분류라도_양쪽이_같으면_붙인다() {
+    // 어휘가 늘어난 날 연결이 통째로 끊기면 안 된다. 어긋난 사실은 로그로만 드러낸다.
+    PolicyTermsCoverage rule = rule("반려동물 위탁비용", 0, "pet_boarding");
+    givenRules(rule);
+    CoverageItem item = item("반려동물보관비용", "pet_boarding");
+
+    CoverageTermsLinkSummary summary = linker.link(analysis, List.of(item));
+
+    assertThat(item.getTermsCoverage()).isSameAs(rule);
+    assertThat(summary.category()).isEqualTo(1);
   }
 
   private void givenRules(PolicyTermsCoverage... rules) {
@@ -181,8 +296,17 @@ class CoverageTermsLinkerTest {
   }
 
   private PolicyTermsCoverage rule(String title, int sortOrder) {
+    return rule(title, sortOrder, null);
+  }
+
+  private PolicyTermsCoverage rule(String title, int sortOrder, String category) {
     PolicyTermsCoverage rule =
-        PolicyTermsCoverage.builder().terms(terms).title(title).sortOrder(sortOrder).build();
+        PolicyTermsCoverage.builder()
+            .terms(terms)
+            .title(title)
+            .category(category)
+            .sortOrder(sortOrder)
+            .build();
     ReflectionTestUtils.setField(rule, "id", UUID.randomUUID());
     return rule;
   }
@@ -203,10 +327,15 @@ class CoverageTermsLinkerTest {
   }
 
   private CoverageItem item(String title) {
+    return item(title, null);
+  }
+
+  private CoverageItem item(String title, String category) {
     CoverageItem item =
         CoverageItem.builder()
             .analysisResult(analysis)
             .title(title)
+            .category(category)
             .coverageStatus(CoverageStatus.COVERED)
             .covered(true)
             .sortOrder(0)

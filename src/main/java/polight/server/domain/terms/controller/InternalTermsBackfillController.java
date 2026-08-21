@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import polight.server.domain.terms.service.TermsBackfillMode;
 import polight.server.domain.terms.service.TermsBackfillService;
 import polight.server.domain.terms.service.TermsBackfillSummary;
 
@@ -35,11 +36,12 @@ public class InternalTermsBackfillController {
    * <p>동기로 처리하고 결과를 돌려준다. 대상이 수십 건 규모라 몇 초면 끝나고, 무엇이 붙었는지 바로 봐야 한 번 더 돌릴지 판단할 수 있다. 대상이
    * 크게 늘면 그때 비동기로 바꾸면 된다.
    *
-   * @param rematch 이미 약관이 붙은 분석까지 다시 판단할지. 기본값 {@code false}
+   * @param mode {@code MISSING_TERMS}(기본) / {@code RELINK_COVERAGES} / {@code REMATCH}. 규칙을 새로
+   *     적재했거나 담보 매칭 단계를 늘린 뒤라면 {@code RELINK_COVERAGES}다 -- 약관은 그대로 두고 담보 규칙만 다시 붙인다
    */
   @PostMapping("/backfill")
   public ResponseEntity<TermsBackfillSummary> backfill(
-      @RequestParam(defaultValue = "false") boolean rematch) {
-    return ResponseEntity.ok(termsBackfillService.backfill(rematch));
+      @RequestParam(defaultValue = "MISSING_TERMS") TermsBackfillMode mode) {
+    return ResponseEntity.ok(termsBackfillService.backfill(mode));
   }
 }

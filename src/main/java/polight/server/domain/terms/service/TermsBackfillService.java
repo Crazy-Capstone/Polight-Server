@@ -18,7 +18,7 @@ import polight.server.domain.analysis.repository.AnalysisResultRepository;
  * <p><b>한 건씩 각자의 트랜잭션에서 처리한다.</b> 전부를 한 트랜잭션에 묶으면 중간 한 건의 오류가 앞서 붙인 것을 전부 되돌리고, 커넥션 하나를
  * 그 시간 내내 쥔다. 실패한 분석은 건너뛰고 id를 요약에 남긴다.
  *
- * <p>여러 번 돌려도 안전하다. 이미 붙은 분석은 대상에서 빠지고({@code rematch=false}), 다시 계산하더라도 같은 입력에 같은 판단이 나온다.
+ * <p>여러 번 돌려도 안전하다. 같은 입력에는 같은 판단이 나오고, 무엇을 대상으로 삼을지는 {@link TermsBackfillMode}가 정한다.
  */
 @Slf4j
 @Service
@@ -31,22 +31,20 @@ public class TermsBackfillService {
   /**
    * 백필을 돌린다.
    *
-   * @param rematch 이미 약관이 붙은 분석까지 다시 판단할지. 평소에는 {@code false}로 둔다. 약관을 새로 적재했거나 매칭 규칙을 고쳐서 예전
-   *     판단을 지금 기준으로 다시 내려야 할 때만 {@code true}로 쓴다. 이때 이전에 붙었던 연결이 끊길 수 있다 -- 그 약관이 지워졌거나 이제
-   *     후보가 여럿이라 가릴 수 없게 된 경우다
+   * @param mode 무엇을 대상으로 삼고 어디까지 다시 판단할지. {@link TermsBackfillMode} 참고
    */
-  public TermsBackfillSummary backfill(boolean rematch) {
+  public TermsBackfillSummary backfill(TermsBackfillMode mode) {
     List<UUID> targets =
-        rematch
+        mode.includesLinked()
             ? analysisResultRepository.findCompletedCertificateIds()
             : analysisResultRepository.findCompletedCertificateIdsWithoutTerms();
 
     if (targets.isEmpty()) {
-      log.info("백필 대상이 없습니다: rematch={}", rematch);
+      log.info("백필 대상이 없습니다: mode={}", mode);
       return TermsBackfillSummary.empty();
     }
 
-    log.info("약관 백필 시작: 대상 {}건, rematch={}", targets.size(), rematch);
+    log.info("약관 백필 시작: 대상 {}건, mode={}", targets.size(), mode);
 
     int termsMatched = 0;
     int coveragesLinked = 0;
@@ -55,7 +53,8 @@ public class TermsBackfillService {
 
     for (UUID analysisResultId : targets) {
       try {
-        AnalysisTermsRelinkResult result = analysisTermsRelinker.relink(analysisResultId, rematch);
+        AnalysisTermsRelinkResult result =
+            analysisTermsRelinker.relink(analysisResultId, mode.rematchesTerms());
         if (result.termsMatched()) {
           termsMatched++;
         }

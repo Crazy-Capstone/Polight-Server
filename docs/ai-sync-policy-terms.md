@@ -264,28 +264,42 @@ NONE      그 외 전부 — 연결하지 않음
 
 ### 6-2. 담보 → 보장 규칙 (`coverage_items.terms_coverage_id`)
 
-증권 담보명과 `policy_terms_coverages.title`을 맞춥니다.
+**title 우선, category는 마지막 폴백**입니다. 위에서 붙으면 아래는 보지 않습니다.
 
 ```
-EXACT      정규화 후 완전히 같음
+EXACT      정규화 후 title 이 완전히 같음
 QUALIFIED  증권 담보명이 규칙명을 통째로 품음
            규칙 "상해의료비"  ←  담보 "해외여행중 상해의료비(3천만원)"
-NONE       후보가 둘 이상이거나 없음 — 연결하지 않음
+CATEGORY   이름으로 못 붙은 경우에만. 같은 category 규칙이 그 약관에 딱 1건일 때만
+           규칙 "기본형 해외여행 실손의료비"  ←  담보 "해외의료실비보장"  (medical_expense)
+NONE       그 외 전부 — 연결하지 않음
 ```
+
+**category는 식별 키가 아니라 보조 분류값입니다.** 여러 담보와 여러 규칙이 같은 값을 공유하라고 만든 값이라, 후보가 하나로 좁혀질 때만 근거가 됩니다.
+
+**이름이 모호해서 못 붙은 담보는 category 단계로 내려가지 않습니다.** 이름으로 가리지 못한 것을 그보다 거친 분류로 가를 수는 없습니다. 그렇게 고른 하나는 근거가 아니라 동전 던지기이고, 그 결과로 다른 조항의 면책이 이 담보의 것으로 화면에 나갑니다. 미연결 사유를 `AMBIGUOUS_TITLE` / `AMBIGUOUS_CATEGORY` / `NOT_FOUND`로 나눠 로그에 남기는 이유입니다 — 고쳐야 할 곳이 다릅니다.
+
+**어휘는 런타임에서 강제하지 않습니다.** 합의한 8종(`medical_expense` `dental_emergency` `flight_delay` `baggage` `emergency_transport` `liability` `trip_cancellation` `death_disability`)을 상수로 갖고 있지만, 그 밖의 값이 와도 **저장하고 비교에도 그대로 씁니다.** 양쪽이 같은 값이면 그 연결은 맞기 때문입니다. 대신 `WARN` 로그로 드러냅니다. enum으로 막으면 9번째 어휘가 배포되는 순간 그 담보들의 연결이 통째로 끊깁니다 — 7종에서 8종으로 이미 한 번 늘었으니 실제로 일어날 일입니다.
 
 **적재 시 부탁드리는 것**
 
 - `title`은 **약관에 인쇄된 담보명 그대로**, 금액이나 적용 범위 수식 없이 넣어 주세요. 증권이 수식을 덧붙이는 쪽이라 약관이 짧아야 `QUALIFIED`가 붙습니다. 반대(규칙명이 더 긴 경우)는 일부러 붙이지 않습니다 — 사용자가 산 것보다 좁은 조건을 씌우게 되기 때문입니다
-- **한 약관 안에서 `title`이 겹치지 않게** 해주세요. 겹치면 그 담보는 연결되지 않습니다
+- **한 약관 안에서 `title`이 겹치지 않게** 해주세요. 겹치면 그 담보는 `AMBIGUOUS_TITLE`로 미연결이고, category 폴백도 타지 않습니다
+- `policy_terms_coverages.category`도 **같은 어휘로 채워** 주세요. 규칙 쪽이 비어 있으면 3단계가 성립하지 않습니다
+- 한 약관 안에서 같은 category 규칙이 2건 이상이면 그 담보는 `AMBIGUOUS_CATEGORY`로 미연결입니다. 정상 동작이고, 그만큼 `title` 적재가 정확할수록 좋습니다
 - 4글자 미만 `title`(`상해`, `사망` 등)은 `QUALIFIED` 대상에서 제외됩니다. 무관한 담보에 걸리는 것을 막기 위해서입니다
 
 **어느 이름이 안 붙었는지는 로그로 나갑니다.** 운영에서 이걸 보고 적재를 보정하시면 됩니다.
 
 ```
-INFO  담보-약관규칙 연결: analysisResultId=..., termsId=..., 5/8건 연결(정확 3, 수식 2)
-INFO  연결되지 않은 담보: termsId=..., [항공기 지연, 여권 재발급 비용, 특별비용]
+INFO  담보-약관규칙 연결: analysisResultId=..., termsId=..., 6/8건 연결(정확 3, 수식 2, 분류 1)
+INFO  연결되지 않은 담보: termsId=..., [UnlinkedCoverage[title=항공기 지연, reason=NOT_FOUND],
+                                        UnlinkedCoverage[title=휴대품손해, reason=AMBIGUOUS_TITLE]]
+WARN  합의한 어휘 밖의 category 입니다(연결은 그대로 진행): termsId=..., [해외의료비]
 INFO  약관에 보장 규칙이 적재되어 있지 않습니다: termsId=..., 보험사=삼성화재, 상품=해외여행보험
 ```
+
+**단계별 건수를 나눠 셉니다.** `분류`만 높다면 연결은 되고 있어도 규칙의 `title` 적재가 부실하다는 신호입니다 — 합쳐 세면 그게 보이지 않습니다.
 
 **연결이 안 되면 화면에서 면책·서류가 비어 나갑니다.** 에러는 아니고 응답 스키마도 그대로입니다.
 
@@ -296,15 +310,20 @@ INFO  약관에 보장 규칙이 적재되어 있지 않습니다: termsId=..., 
 그 한 번의 계기로 내부 엔드포인트를 뒀습니다. `/internal/**`이라 `X-Internal-Api-Key` 헤더가 필요합니다.
 
 ```
-POST /internal/terms/backfill            # 약관이 비어 있는 분석만
-POST /internal/terms/backfill?rematch=true   # 이미 붙은 분석까지 다시 판단
+POST /internal/terms/backfill                          # 기본: 약관이 비어 있는 분석만
+POST /internal/terms/backfill?mode=RELINK_COVERAGES    # 전부. 약관은 그대로 두고 담보 규칙만 다시
+POST /internal/terms/backfill?mode=REMATCH             # 전부. 약관까지 다시 판단
 ```
+
+**규칙을 새로 적재했거나 담보 매칭 단계가 늘어난 뒤라면 `RELINK_COVERAGES`입니다.** 그때 회수해야 할 것은 대부분 "약관은 이미 붙었는데 규칙이 안 붙은" 분석인데, 기본 모드는 그것들을 대상에서 통째로 뺍니다.
 
 응답은 요약입니다 — 대상 수, 약관이 붙은 수, 못 붙은 수, 담보 규칙 연결 수, 실패한 분석 id.
 
 **순서가 중요합니다.** 백필은 그 시점의 `policy_terms` / `policy_terms_coverages`를 보고 판단하므로, **약관과 보장 규칙을 적재한 뒤에** 돌려야 합니다. 먼저 돌리면 "약관 없음"으로 판정되고 아무것도 붙지 않습니다.
 
 스케줄러로 두지 않았습니다. 자동으로 돌면 잘못 적재한 직후에도 그대로 돌아 잘못된 연결이 퍼집니다. 적재가 끝나면 알려주세요 — 저희가 돌리고 결과를 회신하겠습니다.
+
+**기존 분석은 `coverage_items.category`가 비어 있습니다.** category 환산이 붙기 전에 처리된 것들이라, 백필을 돌려도 이 건들은 `EXACT`/`QUALIFIED`까지만 회수됩니다. 3단계 이득은 그 증권을 재분석해야 들어옵니다. 재분석 뒤에 `RELINK_COVERAGES`로 한 번 더 돌리면 됩니다.
 
 ---
 
