@@ -23,6 +23,7 @@ import lombok.NoArgsConstructor;
 import polight.server.domain.common.entity.BaseTimeEntity;
 import polight.server.domain.insurance.entity.PolicyDocument;
 import polight.server.domain.policy.entity.Policy;
+import polight.server.domain.terms.entity.PolicyTerms;
 
 @Getter
 @Entity
@@ -31,7 +32,8 @@ import polight.server.domain.policy.entity.Policy;
     uniqueConstraints = @UniqueConstraint(name = "uk_analysis_results_document_id", columnNames = "document_id"),
     indexes = {
       @Index(name = "idx_analysis_results_policy_id", columnList = "policy_id"),
-      @Index(name = "idx_analysis_results_status", columnList = "status")
+      @Index(name = "idx_analysis_results_status", columnList = "status"),
+      @Index(name = "idx_analysis_results_matched_terms_id", columnList = "matched_terms_id")
     })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AnalysisResult extends BaseTimeEntity {
@@ -47,6 +49,30 @@ public class AnalysisResult extends BaseTimeEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "policy_id")
   private Policy policy;
+
+  /**
+   * 증권에서 읽은 보험사명. AI가 콜백으로 보낸다.
+   *
+   * <p>{@code policies}에 넣지 못해 여기 둔다 -- 그 테이블은 {@code start_date}/{@code end_date}가 NOT
+   * NULL인데 콜백에 보험기간이 없다. 이 값으로 약관을 찾으므로 조회 조건이 될 수 있어야 하고, 그래서 {@code
+   * raw_result_json} 안에만 두지 않는다.
+   */
+  @Column(name = "insurer_name", length = 200)
+  private String insurerName;
+
+  /** 증권에서 읽은 상품명. 보험사명과 함께 약관을 찾는 열쇠다. */
+  @Column(name = "product_name", length = 200)
+  private String productName;
+
+  /**
+   * 이 증권에 해당하는 약관. {@code insurerName}/{@code productName}으로 찾아 연결한다.
+   *
+   * <p>null인 것이 정상 흐름의 일부다. 아직 등록되지 않은 상품이면 찾을 약관이 없다. 애매한 후보를 억지로 붙이는 것보다 비워 두는 편이 낫다 --
+   * 다른 상품의 약관을 근거로 "보장되지 않습니다"라고 답하면 사용자는 받을 수 있는 보험금을 포기한다.
+   */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "matched_terms_id")
+  private PolicyTerms matchedTerms;
 
   @Column(columnDefinition = "TEXT")
   private String summary;
@@ -129,6 +155,8 @@ public class AnalysisResult extends BaseTimeEntity {
       Integer embeddingDimension,
       Float accuracyScore,
       boolean coveragesComplete,
+      String insurerName,
+      String productName,
       LocalDateTime completedAt) {
     this.summary = summary;
     this.rawResultJson = rawResultJson;
@@ -136,7 +164,22 @@ public class AnalysisResult extends BaseTimeEntity {
     this.embeddingDimension = embeddingDimension;
     this.accuracyScore = accuracyScore;
     this.coveragesComplete = coveragesComplete;
+    this.insurerName = insurerName;
+    this.productName = productName;
     markCompleted(completedAt);
+  }
+
+  /**
+   * 찾아낸 약관을 연결한다.
+   *
+   * <p>{@code null}을 넣어 연결을 끊을 수 있다. 재분석으로 보험사/상품명이 달라지면 이전 약관 연결은 더 이상 근거가 아니다.
+   */
+  public void linkTerms(PolicyTerms terms) {
+    this.matchedTerms = terms;
+  }
+
+  public boolean hasMatchedTerms() {
+    return matchedTerms != null;
   }
 
   public void markCompleted(LocalDateTime completedAt) {
@@ -160,6 +203,9 @@ public class AnalysisResult extends BaseTimeEntity {
    *
    * <p>앞선 시도의 산출물을 모두 비운다. 실패했던 분석의 요약이나 정확도가 남아 있으면 재시도 중인 분석의 값으로 오인된다. 담보 트리는 여기서 지우지 않는다 —
    * 완료 콜백이 {@code replaceCoverageItems}로 통째로 교체하기 때문이다.
+   *
+   * <p>약관 연결({@code matchedTerms})도 함께 끊는다. 그 연결은 이전 시도가 읽은 보험사/상품명에서 나온 것이라, 재분석이 다른 이름을 읽으면
+   * 남아 있는 연결은 다른 상품의 약관을 가리키게 된다.
    */
   public void restart(LocalDateTime startedAt) {
     this.status = AnalysisStatus.PROCESSING;
@@ -171,6 +217,9 @@ public class AnalysisResult extends BaseTimeEntity {
     this.rawResultJson = null;
     this.accuracyScore = null;
     this.coveragesComplete = false;
+    this.insurerName = null;
+    this.productName = null;
+    this.matchedTerms = null;
   }
 
   @PrePersist

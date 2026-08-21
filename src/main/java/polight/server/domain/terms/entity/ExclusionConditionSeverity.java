@@ -1,4 +1,4 @@
-package polight.server.domain.analysis.entity;
+package polight.server.domain.terms.entity;
 
 public enum ExclusionConditionSeverity {
   GENERAL,
