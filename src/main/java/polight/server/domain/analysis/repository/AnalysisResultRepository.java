@@ -72,4 +72,23 @@ public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, 
         AND ar.status = polight.server.domain.analysis.entity.AnalysisStatus.COMPLETED
       """)
   List<AnalysisResult> findCompletedByPolicyId(@Param("policyId") UUID policyId);
+
+  /**
+   * 여행에 올린 증권의 완료된 분석을 최근 순으로 돌려준다.
+   *
+   * <p>챗봇이 프롬프트에 실을 가입 담보를 여기서 찾는다. 약관 분석을 제외하는 이유는 담보와 가입금액이 증권에만 있기 때문이다. 같은 여행에 증권을 여러 번
+   * 올릴 수 있어 목록으로 받고 호출한 쪽이 가장 최근 것을 쓴다.
+   */
+  @Query(
+      """
+      SELECT ar
+      FROM AnalysisResult ar
+      WHERE ar.document.trip.id = :tripId
+        AND ar.document.user.id = :userId
+        AND ar.document.documentKind = polight.server.domain.insurance.entity.DocumentKind.CERTIFICATE
+        AND ar.status = polight.server.domain.analysis.entity.AnalysisStatus.COMPLETED
+      ORDER BY ar.completedAt DESC
+      """)
+  List<AnalysisResult> findCompletedCertificateAnalyses(
+      @Param("userId") UUID userId, @Param("tripId") UUID tripId);
 }
