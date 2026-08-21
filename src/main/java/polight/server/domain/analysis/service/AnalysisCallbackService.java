@@ -71,6 +71,8 @@ public class AnalysisCallbackService {
         Boolean.TRUE.equals(request.coveragesComplete()),
         request.insurerName(),
         request.productName(),
+        request.startDate(),
+        request.endDate(),
         LocalDateTime.now());
     result.getDocument().markParseCompleted();
 

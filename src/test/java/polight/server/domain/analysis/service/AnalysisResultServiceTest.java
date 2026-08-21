@@ -105,7 +105,17 @@ class AnalysisResultServiceTest {
   void 실패한_분석을_되돌릴_때_이전_시도의_산출물을_비운다() {
     AnalysisResult failed = processingResult();
     failed.completeWith(
-        "이전 요약", "{}", "text-embedding-3-small", 1536, 0.9f, true, "삼성화재", "해외여행보험", LocalDateTime.now());
+        "이전 요약",
+        "{}",
+        "text-embedding-3-small",
+        1536,
+        0.9f,
+        true,
+        "삼성화재",
+        "해외여행보험",
+        LocalDate.of(2026, 3, 1),
+        LocalDate.of(2026, 3, 6),
+        LocalDateTime.now());
     failed.linkTerms(PolicyTerms.official("삼성화재", "해외여행보험", null, LocalDate.of(2026, 1, 1)));
     failed.markFailed("두 번째 시도 실패", LocalDateTime.now());
     given(analysisResultRepository.findOneByDocumentIdForUpdate(documentId)).willReturn(Optional.of(failed));
@@ -121,6 +131,8 @@ class AnalysisResultServiceTest {
     assertThat(failed.getInsurerName()).isNull();
     assertThat(failed.getProductName()).isNull();
     assertThat(failed.getMatchedTerms()).isNull();
+    assertThat(failed.getInsuranceStartDate()).isNull();
+    assertThat(failed.getInsuranceEndDate()).isNull();
   }
 
   @Test

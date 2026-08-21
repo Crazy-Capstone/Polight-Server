@@ -14,6 +14,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -22,7 +23,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import polight.server.domain.common.entity.BaseTimeEntity;
 import polight.server.domain.insurance.entity.PolicyDocument;
-import polight.server.domain.policy.entity.Policy;
 import polight.server.domain.terms.entity.PolicyTerms;
 
 @Getter
@@ -31,7 +31,6 @@ import polight.server.domain.terms.entity.PolicyTerms;
     name = "analysis_results",
     uniqueConstraints = @UniqueConstraint(name = "uk_analysis_results_document_id", columnNames = "document_id"),
     indexes = {
-      @Index(name = "idx_analysis_results_policy_id", columnList = "policy_id"),
       @Index(name = "idx_analysis_results_status", columnList = "status"),
       @Index(name = "idx_analysis_results_matched_terms_id", columnList = "matched_terms_id")
     })
@@ -46,10 +45,6 @@ public class AnalysisResult extends BaseTimeEntity {
   @JoinColumn(name = "document_id", nullable = false)
   private PolicyDocument document;
 
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "policy_id")
-  private Policy policy;
-
   /**
    * 증권에서 읽은 보험사명. AI가 콜백으로 보낸다.
    *
@@ -63,6 +58,20 @@ public class AnalysisResult extends BaseTimeEntity {
   /** 증권에서 읽은 상품명. 보험사명과 함께 약관을 찾는 열쇠다. */
   @Column(name = "product_name", length = 200)
   private String productName;
+
+  /**
+   * 증권에서 읽은 보험 시작일.
+   *
+   * <p>약관 개정판을 고르는 기준일이다. 같은 상품 약관이 여러 개정판으로 등록되어 있을 때, 이 날에 유효했던 판이 이 증권이 적용받는 판이다.
+   *
+   * <p>null일 수 있다 -- 약관 분석이거나 에이전트가 기간을 읽지 못한 경우다. 그때는 여행 시작일로 대신한다.
+   */
+  @Column(name = "insurance_start_date")
+  private LocalDate insuranceStartDate;
+
+  /** 증권에서 읽은 보험 종료일. */
+  @Column(name = "insurance_end_date")
+  private LocalDate insuranceEndDate;
 
   /**
    * 이 증권에 해당하는 약관. {@code insurerName}/{@code productName}으로 찾아 연결한다.
@@ -116,7 +125,6 @@ public class AnalysisResult extends BaseTimeEntity {
   @Builder
   public AnalysisResult(
       PolicyDocument document,
-      Policy policy,
       String summary,
       String rawResultJson,
       Float accuracyScore,
@@ -128,7 +136,6 @@ public class AnalysisResult extends BaseTimeEntity {
       String failureReason,
       LocalDateTime analyzedAt) {
     this.document = document;
-    this.policy = policy;
     this.summary = summary;
     this.rawResultJson = rawResultJson;
     this.accuracyScore = accuracyScore;
@@ -157,6 +164,8 @@ public class AnalysisResult extends BaseTimeEntity {
       boolean coveragesComplete,
       String insurerName,
       String productName,
+      LocalDate insuranceStartDate,
+      LocalDate insuranceEndDate,
       LocalDateTime completedAt) {
     this.summary = summary;
     this.rawResultJson = rawResultJson;
@@ -166,6 +175,8 @@ public class AnalysisResult extends BaseTimeEntity {
     this.coveragesComplete = coveragesComplete;
     this.insurerName = insurerName;
     this.productName = productName;
+    this.insuranceStartDate = insuranceStartDate;
+    this.insuranceEndDate = insuranceEndDate;
     markCompleted(completedAt);
   }
 
@@ -219,6 +230,8 @@ public class AnalysisResult extends BaseTimeEntity {
     this.coveragesComplete = false;
     this.insurerName = null;
     this.productName = null;
+    this.insuranceStartDate = null;
+    this.insuranceEndDate = null;
     this.matchedTerms = null;
   }
 

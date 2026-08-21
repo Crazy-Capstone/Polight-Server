@@ -95,6 +95,43 @@ class PolicyTermsMatchingServiceTest {
   }
 
   @Test
+  void 보험_시작일이_있으면_여행_시작일보다_그것을_기준으로_고른다() {
+    // 기준이 되어야 할 것은 가입 시점이다. 여행 시작일은 그 값이 없을 때의 대용일 뿐이다.
+    // 여행을 2026-08 로 잡았어도 2026-02 에 가입했다면 적용받는 것은 2026-01 개정판이다.
+    PolicyTerms january = verified("삼성화재", "해외여행보험", "2026.01", LocalDate.of(2026, 1, 1));
+    PolicyTerms july = verified("삼성화재", "해외여행보험", "2026.07", LocalDate.of(2026, 7, 1));
+    givenUsableTerms(january, july);
+
+    AnalysisResult analysis =
+        analysis(
+            DocumentKind.CERTIFICATE,
+            "삼성화재",
+            "해외여행보험",
+            LocalDate.of(2026, 8, 10),
+            LocalDate.of(2026, 2, 15));
+
+    TermsMatch match = service.match(analysis);
+
+    assertThat(match.stage()).isEqualTo(TermsMatchStage.REVISION);
+    assertThat(match.terms()).isSameAs(january);
+  }
+
+  @Test
+  void 보험_시작일이_없으면_여행_시작일로_내려간다() {
+    // 에이전트가 증권에서 기간을 못 읽는 경우다. 여행자보험의 보험기간은 여행 기간을 덮으므로
+    // 여행 시작일도 보험기간 안에 있다.
+    PolicyTerms january = verified("삼성화재", "해외여행보험", "2026.01", LocalDate.of(2026, 1, 1));
+    PolicyTerms july = verified("삼성화재", "해외여행보험", "2026.07", LocalDate.of(2026, 7, 1));
+    givenUsableTerms(january, july);
+
+    TermsMatch match =
+        service.match(certificateAnalysis("삼성화재", "해외여행보험", LocalDate.of(2026, 3, 10)));
+
+    assertThat(match.stage()).isEqualTo(TermsMatchStage.REVISION);
+    assertThat(match.terms()).isSameAs(january);
+  }
+
+  @Test
   void 기준일을_모르면_최신_개정판을_고른다() {
     PolicyTerms old = verified("삼성화재", "해외여행보험", "2024.01", LocalDate.of(2024, 1, 1));
     PolicyTerms latest = verified("삼성화재", "해외여행보험", "2026.01", LocalDate.of(2026, 1, 1));
@@ -265,6 +302,15 @@ class PolicyTermsMatchingServiceTest {
 
   private AnalysisResult analysis(
       DocumentKind kind, String insurerName, String productName, LocalDate tripStartDate) {
+    return analysis(kind, insurerName, productName, tripStartDate, null);
+  }
+
+  private AnalysisResult analysis(
+      DocumentKind kind,
+      String insurerName,
+      String productName,
+      LocalDate tripStartDate,
+      LocalDate insuranceStartDate) {
     PolicyDocument document =
         PolicyDocument.builder()
             .user(user)
@@ -275,7 +321,18 @@ class PolicyTermsMatchingServiceTest {
             .build();
 
     AnalysisResult result = AnalysisResult.builder().document(document).build();
-    result.completeWith(null, "{}", null, null, null, false, insurerName, productName, null);
+    result.completeWith(
+        null,
+        "{}",
+        null,
+        null,
+        null,
+        false,
+        insurerName,
+        productName,
+        insuranceStartDate,
+        insuranceStartDate == null ? null : insuranceStartDate.plusDays(5),
+        null);
     return result;
   }
 
