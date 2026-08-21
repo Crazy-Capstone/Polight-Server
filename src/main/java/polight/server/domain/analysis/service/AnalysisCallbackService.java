@@ -1,6 +1,7 @@
 package polight.server.domain.analysis.service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,8 @@ import polight.server.domain.analysis.entity.CoverageItem;
 import polight.server.domain.analysis.entity.CoverageStatus;
 import polight.server.domain.analysis.repository.AnalysisResultRepository;
 import polight.server.domain.analysis.repository.CoverageItemRepository;
+import polight.server.domain.terms.service.CoverageTermsLinkSummary;
+import polight.server.domain.terms.service.CoverageTermsLinker;
 import polight.server.domain.terms.service.PolicyTermsMatchingService;
 import polight.server.domain.terms.service.TermsMatch;
 import polight.server.global.exception.BaseException;
@@ -44,6 +47,7 @@ public class AnalysisCallbackService {
   private final AnalysisResultRepository analysisResultRepository;
   private final CoverageItemRepository coverageItemRepository;
   private final PolicyTermsMatchingService policyTermsMatchingService;
+  private final CoverageTermsLinker coverageTermsLinker;
 
   /**
    * 분석 완료 콜백.
@@ -56,7 +60,7 @@ public class AnalysisCallbackService {
     AnalysisResult result = getAnalysisResult(analysisResultId);
     warnOnIdMismatch(analysisResultId, request.analysisResultId());
 
-    replaceCoverageItems(result, request.coverageItems());
+    List<CoverageItem> savedItems = replaceCoverageItems(result, request.coverageItems());
 
     result.completeWith(
         request.summary(),
@@ -79,11 +83,17 @@ public class AnalysisCallbackService {
     // 매칭은 후보 목록을 한 번 읽어 메모리에서 비교하는 것이 전부라 콜백 응답을 늦추지 않는다.
     TermsMatch termsMatch = policyTermsMatchingService.matchAndLink(result);
 
+    // 약관이 정해졌으니 담보 하나하나를 그 약관의 보장 규칙에 붙인다. 순서가 강제된다 --
+    // 어느 약관인지 모르면 어느 규칙을 찾을지도 정할 수 없다.
+    CoverageTermsLinkSummary linkSummary = coverageTermsLinker.link(result, savedItems);
+
     log.info(
-        "분석 완료 콜백 반영: analysisResultId={}, 담보 {}건, 약관 매칭={}",
+        "분석 완료 콜백 반영: analysisResultId={}, 담보 {}건, 약관 매칭={}, 규칙 연결 {}/{}건",
         analysisResultId,
-        request.coverageItems() == null ? 0 : request.coverageItems().size(),
-        termsMatch.stage());
+        savedItems.size(),
+        termsMatch.stage(),
+        linkSummary.linked(),
+        linkSummary.total());
   }
 
   /** 분석 실패 콜백. 담보 트리는 건드리지 않는다. 실패 전에 저장된 것이 있으면 그대로 남는다. */
@@ -103,15 +113,19 @@ public class AnalysisCallbackService {
         .orElseThrow(() -> new BaseException(ErrorCode.ANALYSIS_RESULT_NOT_FOUND));
   }
 
-  private void replaceCoverageItems(AnalysisResult result, List<CoverageItemPayload> payloads) {
+  /** @return 저장된 담보. 뒤이어 약관 규칙에 붙일 대상이라 돌려준다 */
+  private List<CoverageItem> replaceCoverageItems(
+      AnalysisResult result, List<CoverageItemPayload> payloads) {
     deleteCoverageItems(result.getId());
 
     List<CoverageItemPayload> items = payloads == null ? List.of() : payloads;
+    List<CoverageItem> saved = new ArrayList<>(items.size());
     for (int index = 0; index < items.size(); index++) {
       CoverageItemPayload payload = items.get(index);
-      coverageItemRepository.save(toCoverageItem(result, payload, index));
+      saved.add(coverageItemRepository.save(toCoverageItem(result, payload, index)));
       warnOnDroppedTermsFacts(payload, index);
     }
+    return saved;
   }
 
   /**
