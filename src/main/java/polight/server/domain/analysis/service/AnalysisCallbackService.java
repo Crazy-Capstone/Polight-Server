@@ -28,6 +28,8 @@ import polight.server.domain.analysis.repository.ExclusionConditionRepository;
 import polight.server.domain.analysis.repository.RequiredDocumentRepository;
 import polight.server.domain.analysis.repository.SubCoverageLimitRepository;
 import polight.server.domain.rag.repository.CoverageItemSourceRepository;
+import polight.server.domain.terms.service.PolicyTermsMatchingService;
+import polight.server.domain.terms.service.TermsMatch;
 import polight.server.global.exception.BaseException;
 import polight.server.global.exception.ErrorCode;
 
@@ -43,6 +45,10 @@ import polight.server.global.exception.ErrorCode;
  *   <li>{@code is_covered} — {@code coverage_status}에서 파생한다
  *   <li>{@code sort_order} — 배열 순서로 부여한다. AI는 배열을 화면에 보여줄 순서(중요도 순)로만 정렬해 보낸다
  * </ul>
+ *
+ * <p>완료 콜백은 담보를 저장한 뒤 <b>약관 연결</b>까지 한다. AI는 "어느 약관인가"를 보내지 않으므로, 콜백으로 받은 보험사/상품명으로 백엔드가
+ * {@code policy_terms}를 찾는다({@link PolicyTermsMatchingService}). 재수신해도 같은 이름으로 같은 약관을 다시 찾으므로
+ * 이 단계도 멱등하다.
  */
 @Slf4j
 @Service
@@ -56,6 +62,7 @@ public class AnalysisCallbackService {
   private final RequiredDocumentRepository requiredDocumentRepository;
   private final ExclusionConditionRepository exclusionConditionRepository;
   private final CoverageItemSourceRepository coverageItemSourceRepository;
+  private final PolicyTermsMatchingService policyTermsMatchingService;
 
   /**
    * 분석 완료 콜백.
@@ -77,13 +84,25 @@ public class AnalysisCallbackService {
         request.embeddingDimension(),
         request.accuracyScore(),
         Boolean.TRUE.equals(request.coveragesComplete()),
+        request.insurerName(),
+        request.productName(),
         LocalDateTime.now());
     result.getDocument().markParseCompleted();
 
+    // 보험사/상품명이 방금 채워졌으니 여기서 바로 약관을 찾는다.
+    //
+    // 같은 트랜잭션 안에서 하는 이유: 연결이 나중에 따로 서면, 그 사이에 조회한 분석 결과는
+    // 완료 상태인데 약관만 비어 있다. 프론트는 그것을 "약관 없음"으로 보고 사용자에게 약관
+    // 업로드를 요청하게 된다 -- 잠시 뒤면 붙을 약관인데도.
+    //
+    // 매칭은 후보 목록을 한 번 읽어 메모리에서 비교하는 것이 전부라 콜백 응답을 늦추지 않는다.
+    TermsMatch termsMatch = policyTermsMatchingService.matchAndLink(result);
+
     log.info(
-        "분석 완료 콜백 반영: analysisResultId={}, 담보 {}건",
+        "분석 완료 콜백 반영: analysisResultId={}, 담보 {}건, 약관 매칭={}",
         analysisResultId,
-        request.coverageItems() == null ? 0 : request.coverageItems().size());
+        request.coverageItems() == null ? 0 : request.coverageItems().size(),
+        termsMatch.stage());
   }
 
   /** 분석 실패 콜백. 담보 트리는 건드리지 않는다. 실패 전에 저장된 것이 있으면 그대로 남는다. */

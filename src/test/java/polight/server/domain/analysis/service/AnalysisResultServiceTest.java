@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -25,6 +26,7 @@ import polight.server.domain.insurance.entity.DocumentKind;
 import polight.server.domain.insurance.entity.DocumentParseStatus;
 import polight.server.domain.insurance.entity.PolicyDocument;
 import polight.server.domain.insurance.service.PolicyDocumentService;
+import polight.server.domain.terms.entity.PolicyTerms;
 
 @ExtendWith(MockitoExtension.class)
 class AnalysisResultServiceTest {
@@ -93,7 +95,9 @@ class AnalysisResultServiceTest {
   @Test
   void 실패한_분석을_되돌릴_때_이전_시도의_산출물을_비운다() {
     AnalysisResult failed = processingResult();
-    failed.completeWith("이전 요약", "{}", "text-embedding-3-small", 1536, 0.9f, true, LocalDateTime.now());
+    failed.completeWith(
+        "이전 요약", "{}", "text-embedding-3-small", 1536, 0.9f, true, "삼성화재", "해외여행보험", LocalDateTime.now());
+    failed.linkTerms(PolicyTerms.official("삼성화재", "해외여행보험", null, LocalDate.of(2026, 1, 1)));
     failed.markFailed("두 번째 시도 실패", LocalDateTime.now());
     given(analysisResultRepository.findOneByDocumentIdForUpdate(documentId)).willReturn(Optional.of(failed));
 
@@ -103,6 +107,11 @@ class AnalysisResultServiceTest {
     assertThat(failed.getRawResultJson()).isNull();
     assertThat(failed.getAccuracyScore()).isNull();
     assertThat(failed.isCoveragesComplete()).isFalse();
+    // 보험사/상품명과 약관 연결도 함께 비워야 한다. 재분석이 다른 이름을 읽으면 남아 있는 연결은
+    // 다른 상품의 약관을 가리키게 된다.
+    assertThat(failed.getInsurerName()).isNull();
+    assertThat(failed.getProductName()).isNull();
+    assertThat(failed.getMatchedTerms()).isNull();
   }
 
   @Test

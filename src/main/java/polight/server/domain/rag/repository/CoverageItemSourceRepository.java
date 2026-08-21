@@ -13,11 +13,11 @@ public interface CoverageItemSourceRepository extends JpaRepository<CoverageItem
 
   List<CoverageItemSource> findByCoverageItemIdOrderBySourceRoleAscCreatedAtAsc(UUID coverageItemId);
 
-  List<CoverageItemSource> findByPolicyChunkId(UUID policyChunkId);
+  List<CoverageItemSource> findByTermsChunkId(UUID termsChunkId);
 
-  boolean existsByCoverageItemIdAndPolicyChunkIdAndSourceRole(
-      UUID coverageItemId, UUID policyChunkId, CoverageItemSourceRole sourceRole);
+  boolean existsByCoverageItemIdAndTermsChunkIdAndSourceRole(
+      UUID coverageItemId, UUID termsChunkId, CoverageItemSourceRole sourceRole);
 
-  /** 담보를 지우기 전에 이 테이블부터 비워야 한다. policy_chunk_id 쪽 FK 때문에 순서가 강제된다. */
+  /** 담보를 지우기 전에 이 테이블부터 비워야 한다. coverage_item_id 쪽 FK 때문에 순서가 강제된다. */
   void deleteByCoverageItemIdIn(Collection<UUID> coverageItemIds);
 }
