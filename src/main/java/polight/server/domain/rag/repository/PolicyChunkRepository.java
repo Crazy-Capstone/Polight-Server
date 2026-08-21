@@ -1,5 +1,6 @@
 package polight.server.domain.rag.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,6 +14,9 @@ public interface PolicyChunkRepository extends JpaRepository<PolicyChunk, UUID> 
   List<PolicyChunk> findByAnalysisResultIdOrderByChunkIndexAsc(UUID analysisResultId);
 
   Optional<PolicyChunk> findByAnalysisResultIdAndChunkIndex(UUID analysisResultId, int chunkIndex);
+
+  /** 이 분석으로 색인된 조각이 하나라도 있는지. 조각을 만드는 주체는 AI 서버다. */
+  boolean existsByAnalysisResultId(UUID analysisResultId);
 
   //TODO : 쿼리 검토 필요
   @Query(
@@ -37,17 +41,6 @@ public interface PolicyChunkRepository extends JpaRepository<PolicyChunk, UUID> 
   List<PolicyChunk> findCompletedChunksByUserIdAndTripId(
       @Param("userId") UUID userId, @Param("tripId") UUID tripId);
 
-  @Query(
-      """
-      SELECT pc
-      FROM PolicyChunk pc
-      WHERE pc.user.id = :userId
-        AND pc.policy.id = :policyId
-        AND pc.analysisResult.status = polight.server.domain.analysis.entity.AnalysisStatus.COMPLETED
-      ORDER BY pc.analysisResult.completedAt DESC, pc.chunkIndex ASC
-      """)
-  List<PolicyChunk> findCompletedChunksByUserIdAndPolicyId(
-      @Param("userId") UUID userId, @Param("policyId") UUID policyId);
 
   @Query(
       """
@@ -72,4 +65,7 @@ public interface PolicyChunkRepository extends JpaRepository<PolicyChunk, UUID> 
       """)
   List<PolicyChunk> findCompletedChunksByUserIdAndDocumentId(
       @Param("userId") UUID userId, @Param("documentId") UUID documentId);
+
+  /** 주어진 id 중 해당 사용자 소유인 청크만. 소유자 조건이 있어야 남의 청크 조회를 막을 수 있다. */
+  List<PolicyChunk> findByIdInAndUserId(Collection<UUID> ids, UUID userId);
 }

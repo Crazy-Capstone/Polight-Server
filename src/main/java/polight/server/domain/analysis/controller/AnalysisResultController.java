@@ -5,12 +5,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import polight.server.domain.analysis.dto.AnalysisResponse;
 import polight.server.domain.analysis.dto.CoverageAnalysisResponse;
@@ -37,6 +39,7 @@ public class AnalysisResultController {
 
           동일한 문서에 대한 중복 요청은 기존 분석 작업을 그대로 반환합니다. 재분석은 일어나지 않습니다.
           """)
+  @ResponseStatus(HttpStatus.CREATED)
   public ResponseEntity<AnalysisResponse> startAnalysis(
       @AuthenticationPrincipal UUID userId,
       @PathVariable UUID tripId,

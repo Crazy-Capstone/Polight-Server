@@ -93,8 +93,12 @@
 | 7 | GET | `/api/v1/trips/{tripId}/documents` | ✓ | 보험 문서 목록 |
 | 8 | POST | `/api/v1/trips/{tripId}/documents/{documentId}/analysis` | ✓ | 분석 시작 |
 | 9 | GET | `/api/v1/trips/{tripId}/documents/{documentId}/analysis` | ✓ | 분석 상태/결과 조회 |
+| 10 | POST | `/api/v1/trips/{tripId}/chat/messages` | ✓ | 챗봇에 질문하기 |
+| 11 | GET | `/api/v1/trips/{tripId}/chat/messages` | ✓ | 대화 이력 조회 |
 
-> `/api/users`, `/api/chat-messages` 컨트롤러는 클래스만 존재하고 **엔드포인트가 아직 없습니다.**
+> `/api/users` 컨트롤러는 클래스만 존재하고 **엔드포인트가 아직 없습니다.**
+>
+> `GET /api/v1/trips/{tripId}/documents/{documentId}/analysis/coverages`(보장 내역 조회)는 구현돼 있으나 이 문서에 아직 정리되지 않았습니다.
 
 ---
 
@@ -289,7 +293,7 @@ Content-Type: multipart/form-data
 | `file` | binary | ✓ | 업로드할 PDF 파일 |
 | `documentKind` | string | ✕ | `CERTIFICATE` \| `TERMS`. **생략하면 `CERTIFICATE`(증권)** |
 
-- 파일 크기 제한: **Spring 기본값 — 파일당 1MB, 요청당 10MB** (별도 설정 없음). 초과 시 `POLICY_DOCUMENT_TOO_LARGE`(413).
+- 파일 크기 제한: **파일당 30MB, 요청당 35MB** (`application.yaml` 기본값. 배포 환경에서 `MULTIPART_MAX_FILE_SIZE` / `MULTIPART_MAX_REQUEST_SIZE`로 조정). 초과 시 `POLICY_DOCUMENT_TOO_LARGE`(413).
 - **확장자/MIME 타입 검증은 현재 없습니다.** 어떤 파일이든 업로드됩니다. 프론트에서 `accept="application/pdf"` 등으로 1차 제한을 걸어 주세요.
 - 원본 파일명은 255자를 넘으면 뒤 255자만 저장되고, 비어 있으면 `"policy-document"`로 대체됩니다.
 - 같은 파일을 여러 번 올리면 **매번 별개의 문서로 생성**됩니다(중복 검사 없음).
@@ -320,7 +324,7 @@ Content-Type: multipart/form-data
 }
 ```
 
-**에러**: `EMPTY_POLICY_DOCUMENT_FILE`(400), `AUTHENTICATION_REQUIRED`(401), `TRIP_NOT_FOUND`(404), `POLICY_DOCUMENT_TOO_LARGE`(413), `POLICY_DOCUMENT_STORAGE_FAILED`(500)
+**에러**: `INVALID_INPUT`(400), `EMPTY_POLICY_DOCUMENT_FILE`(400), `AUTHENTICATION_REQUIRED`(401), `TRIP_NOT_FOUND`(404), `POLICY_DOCUMENT_TOO_LARGE`(413), `POLICY_DOCUMENT_STORAGE_FAILED`(500)
 
 > 📌 `multipart/form-data` 요청 시 `Content-Type` 헤더를 **직접 지정하지 마세요.** boundary가 깨집니다. `FormData`만 넘기면 브라우저가 알아서 설정합니다.
 
@@ -348,7 +352,20 @@ POST /api/v1/trips/{tripId}/documents/{documentId}/analysis
 
 **요청 본문 없음.**
 
-**멱등적입니다** — 같은 문서로 다시 호출하면 새 분석을 만들지 않고 기존 분석 작업을 그대로 돌려줍니다(항상 201).
+**상태에 따라 동작이 다릅니다** (항상 201).
+
+| 기존 분석 상태 | 동작 |
+| --- | --- |
+| 없음 | 새 분석을 만들고 AI 서버에 요청 |
+| `PROCESSING` | 아무것도 하지 않고 진행 중인 분석을 그대로 반환 |
+| `COMPLETED` | 아무것도 하지 않고 완료된 분석을 그대로 반환 |
+| `FAILED` | **같은 분석을 다시 시작합니다.** `status`가 `PROCESSING`으로, `failureReason`이 `null`로 돌아갑니다. 단 아래 제약이 있습니다 |
+
+> **분석이 실패했을 때 문서를 다시 업로드하지 마세요.** 원문 파일은 S3에 그대로 있으므로 같은 `documentId`로 이 API를 다시 호출하면 재시도됩니다. 재업로드는 쓰지 않는 문서 레코드만 늘립니다.
+>
+> ⚠️ **예외 — 재시도할 수 없는 경우가 있습니다.** 약관 분석이 색인(청킹·임베딩)까지 진행된 뒤 실패했다면 재시도가 `409 ANALYSIS_RETRY_NOT_SUPPORTED`로 거절됩니다. AI 서버가 이전 색인을 지우는 기능이 아직 없어, 재시도하면 매번 같은 제약 위반으로 실패하기 때문입니다. 이 응답을 받으면 **문서를 새로 업로드**하도록 안내하세요.
+>
+> 증권은 색인을 만들지 않으므로 이 제약에 걸리지 않습니다. 증권 재시도는 항상 가능합니다.
 
 **201 Created** — 응답 헤더 `Location: /api/v1/trips/{tripId}/documents/{documentId}/analysis`
 
@@ -374,7 +391,7 @@ POST /api/v1/trips/{tripId}/documents/{documentId}/analysis
 }
 ```
 
-**에러**: `AUTHENTICATION_REQUIRED`(401), `TRIP_NOT_FOUND`(404), `POLICY_DOCUMENT_NOT_FOUND`(404)
+**에러**: `AUTHENTICATION_REQUIRED`(401), `TRIP_NOT_FOUND`(404), `POLICY_DOCUMENT_NOT_FOUND`(404), `ANALYSIS_RETRY_NOT_SUPPORTED`(409)
 
 ---
 
@@ -391,6 +408,142 @@ GET /api/v1/trips/{tripId}/documents/{documentId}/analysis
 > ⚠️ **분석을 시작하기 전에 조회하면 `ANALYSIS_RESULT_NOT_FOUND`(404)** 입니다. 반드시 POST를 먼저 호출하세요.
 >
 > **폴링 방식**: 분석 완료 알림(WebSocket/SSE)은 없습니다. POST 후 이 엔드포인트를 폴링(예: 3~5초 간격)하며 `status`가 `COMPLETED` 또는 `FAILED`가 될 때까지 기다리는 방식으로 구현하세요.
+>
+> **폴링은 반드시 끝납니다.** AI 서버가 콜백을 보내지 않아도 서버가 제한 시간(기본 10분, `ANALYSIS_TIMEOUT_AFTER`) 이 지난 분석을 `FAILED`로 내립니다. `failureReason`은 `AI 서버 응답 시간 초과 (10분)`입니다.
+>
+> 단, 이 보장은 서버의 타임아웃 처리가 켜져 있을 때만 성립합니다(`ANALYSIS_TIMEOUT_ENABLED`, 기본값 `true`). 껐다면 콜백이 오지 않는 분석은 `PROCESSING`에 그대로 남으므로, 그 환경을 대상으로 개발한다면 프론트엔드에도 자체 타임아웃이 필요합니다.
+>
+> `FAILED`를 받으면 사용자에게 재시도 버튼을 노출하고, 누르면 **3.8을 같은 `documentId`로 다시 호출**하세요.
+
+---
+
+### 3.10 챗봇에 질문하기
+
+```
+POST /api/v1/trips/{tripId}/chat/messages
+Content-Type: application/json
+```
+
+여행에 올린 약관을 근거로 답변합니다. 질문과 답변을 **서버가 저장하므로 프론트가 대화 이력을 들고 있을 필요가 없습니다.**
+
+**요청**
+
+```json
+{
+  "question": "항공편이 지연되면 보상되나요?"
+}
+```
+
+| 필드 | 타입 | 필수 | 비고 |
+| --- | --- | --- | --- |
+| `question` | string | ✓ | 1~2000자. 공백만 보내면 `INVALID_INPUT`(400) |
+
+**200 OK**
+
+```json
+{
+  "sessionId": "9f1c...",
+  "messageId": "3ab7...",
+  "answer": "4시간 이상 지연 시 지연비용 특약으로 보상됩니다. 다만 …",
+  "responseType": "TEXT",
+  "sources": [
+    {
+      "chunkId": "11111111-…",
+      "documentId": "22222222-…",
+      "sectionTitle": "제3관 배상책임 특별약관",
+      "clausePath": "제3관 > 제12조",
+      "pageStart": 12,
+      "pageEnd": 12,
+      "quote": "항공기 지연으로 인하여 …"
+    }
+  ]
+}
+```
+
+**에러**: `AUTHENTICATION_REQUIRED`(401), `INVALID_INPUT`(400), `TRIP_NOT_FOUND`(404), `AI_CHAT_REQUEST_FAILED`(502)
+
+#### 프론트가 알아야 할 것
+
+- **세션을 만들거나 고르는 호출이 없습니다.** 대화 세션은 여행당 하나이고, 첫 질문에 서버가 자동으로 만들어 이후 재사용합니다. 응답의 `sessionId`는 참고용이며 다음 요청에 실어 보내지 않아도 됩니다.
+- **대화 이력을 보낼 필요가 없습니다.** 서버가 직전 6개(3턴)를 잘라 AI에 전달합니다. 화면에 이전 대화를 그릴 때는 3.11로 받아 오세요.
+- **검색 범위는 여행 전체**입니다. 그 여행에 올린 약관이 모두 대상이며, 문서를 지정하는 파라미터는 없습니다.
+- `responseType`은 **현재 항상 `TEXT`** 입니다. 병원 카드 같은 카드형 응답은 표시할 데이터 출처가 아직 없어 내려가지 않습니다.
+- `sources`는 답변의 근거가 된 약관 원문입니다. 화면에 쓰지 않아도 되지만, 답변이 이상할 때 어느 조항을 보고 답했는지 확인할 수 있습니다. 빈 배열일 수 있습니다.
+- `sectionTitle`·`clausePath`·`pageStart`·`pageEnd`는 **비어 있을 수 있습니다.** 그때도 `quote`는 남습니다.
+
+> ⚠️ **응답까지 수 초 걸립니다.** 검색과 답변 생성을 기다리는 동기 호출이라 클라이언트 타임아웃을 넉넉히(60초 이상) 두세요. 완료 알림(WebSocket/SSE)은 없습니다.
+>
+> ⚠️ **502를 받아도 사용자가 보낸 질문은 서버에 저장돼 있습니다.** 화면에서 질문 말풍선을 지우지 말고, 재시도 버튼을 붙이는 쪽이 자연스럽습니다.
+>
+> ⚠️ **증권 분석이 끝나 있으면 답변 품질이 올라갑니다.** 가입 담보와 한도를 프롬프트에 함께 실어 보내기 때문입니다. 증권 분석이 없거나 진행 중이면 약관만 보고 답하므로, 가입하지 않은 담보를 물었을 때 "보상됩니다"라고 답할 수 있습니다.
+
+---
+
+### 3.11 대화 이력 조회
+
+```
+GET /api/v1/trips/{tripId}/chat/messages?limit=50
+```
+
+이 여행의 대화를 **오래된 것부터** 돌려줍니다. 화면에 위에서 아래로 그대로 그리면 됩니다.
+
+| 쿼리 | 타입 | 필수 | 비고 |
+| --- | --- | --- | --- |
+| `limit` | int | ✕ | 최근 몇 개를 받을지. 기본 50, 최대 200. 범위를 벗어나면 서버가 맞춥니다 |
+
+**200 OK**
+
+```json
+{
+  "sessionId": "9f1c…",
+  "messages": [
+    {
+      "messageId": "1aaa…",
+      "sender": "USER",
+      "content": "항공편이 지연되면 보상되나요?",
+      "responseType": "TEXT",
+      "sources": [],
+      "createdAt": "2026-08-21T14:14:02"
+    },
+    {
+      "messageId": "2bbb…",
+      "sender": "ASSISTANT",
+      "content": "4시간 이상 지연 시 …",
+      "responseType": "TEXT",
+      "sources": [
+        {
+          "chunkId": "11111111-…",
+          "documentId": "22222222-…",
+          "sectionTitle": "제3관 배상책임 특별약관",
+          "clausePath": "제3관 > 제12조",
+          "pageStart": 12,
+          "pageEnd": 12,
+          "quote": "항공기 지연으로 인하여 …"
+        }
+      ],
+      "createdAt": "2026-08-21T14:14:09"
+    }
+  ]
+}
+```
+
+**대화가 아직 없을 때 (200 OK)**
+
+```json
+{ "sessionId": null, "messages": [] }
+```
+
+**에러**: `AUTHENTICATION_REQUIRED`(401), `TRIP_NOT_FOUND`(404)
+
+#### 프론트가 알아야 할 것
+
+- **대화가 없어도 200입니다.** `sessionId`가 `null`, `messages`가 빈 배열로 옵니다. 여행을 만들고 챗봇을 아직 열지 않은 상태가 정상이라 오류로 두지 않았습니다.
+- `sender`가 `USER`면 사용자 말풍선, `ASSISTANT`면 챗봇 말풍선입니다. `SYSTEM`은 현재 생성되지 않습니다.
+- `messages[]` 항목은 **3.10 응답과 같은 모양**입니다(`messageId`·`content`·`responseType`·`sources`). 질문을 보낸 직후 화면에 붙이는 객체와 이력에서 받은 객체를 다르게 다룰 필요가 없습니다.
+- `createdAt`은 말풍선 시각 표시용입니다. 타임존 없는 로컬 시각(서버 TZ = UTC)으로 내려갑니다.
+- 사용자 메시지의 `sources`는 **항상 빈 배열**입니다.
+
+> ⚠️ **더 오래된 대화를 이어서 받는 방법(커서 페이지네이션)은 아직 없습니다.** 세션이 여행당 하나이고 닫는 시점이 없어 대화가 계속 쌓이므로, 응답 크기를 막기 위해 최근 N개만 내려줍니다. "더 보기"가 필요해지면 그때 추가합니다.
 
 ---
 
@@ -441,7 +594,9 @@ GET /api/v1/trips/{tripId}/documents/{documentId}/analysis
 | 여행/문서 삭제 | 없음 |
 | 문서 단건 조회·다운로드 | 없음 |
 | 페이지네이션 | 목록 API 모두 전체 반환 |
-| 분석 상세 결과(보장 항목·면책 조건) | 엔티티는 있으나 **응답 DTO에 미포함**. 현재 노출은 `summary` 문자열뿐 |
-| 실제 분석 파이프라인 | 미구현. `status`는 `PROCESSING`에서 자동으로 변하지 않음 |
+| 분석 상세 결과(보장 항목·면책 조건) | `GET .../analysis/coverages` 로 제공. `GET .../analysis` 응답에는 `summary` 문자열만 들어감 |
+| 실제 분석 파이프라인 | **구현됨.** 증권 업로드 → AI 서버 요청 → 콜백 수신까지 동작하며 `status`가 자동으로 전이함 |
+| 분석 재시도 | `FAILED` 상태에서 3.8을 다시 호출하면 재시도됨. 재업로드 불필요 |
+| 분석 타임아웃 | 제한 시간(기본 10분)을 넘긴 `PROCESSING` 분석은 서버가 `FAILED`로 내림 |
 | 채팅 API | 미구현 |
 | 파일 타입 검증 | 미구현 (서버가 모든 확장자 허용) |

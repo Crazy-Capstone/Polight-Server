@@ -107,6 +107,32 @@ Python이 `analysis_results` / `policy_documents`를 조회하지 않아도 되�
 - **콜백 전 재시도** → Python이 해당 `analysis_result_id`의 chunk를 DELETE 후 재삽입. 안전합니다. (DELETE 권한을 요청하신 이유로 이해했습니다.)
 - **콜백 후 재시도** → `coverage_item_sources`가 chunk를 FK 참조하므로 **DELETE가 FK 위반**입니다. 이 경우 Spring이 `coverage_items`부터 정리해야 하니, 재분석 API를 만들 때 같이 다루겠습니다. 지금은 **콜백 후 재시도는 하지 않는 것으로** 합의하고 싶습니다.
 
+#### 갱신 — 재분석 API를 만들면서 확인한 것
+
+재분석(`POST .../documents/{documentId}/analysis` 재호출)을 구현했습니다. 원문 파일이 S3에 남아 있으니 사용자가 문서를 다시 올리지 않아도 되게 하려는 것입니다. 그 과정에서 위 두 항목을 다시 확인했고, 두 가지가 달라졌습니다.
+
+**1. `policy_chunks` DELETE가 AI 서버에 아직 없습니다.**
+
+`polight-ai`를 확인해보니 chunk를 지우는 코드가 없습니다(`app/` 전체에서 chunk 관련 DELETE 0건). `pg_repository`는 INSERT만 합니다. 그래서 **콜백 전 재시도도 현재는 안전하지 않습니다** — 재실행하면 같은 `analysis_result_id`에 `chunk_index` 0부터 다시 넣어 `uk_policy_chunks_analysis_chunk_index` 위반으로 실패합니다.
+
+이걸 그대로 두면 재시도가 매번 같은 제약 위반으로 실패하고, 사용자에게는 원인 모를 실패가 반복됩니다. 그래서 **백엔드가 재시도를 막았습니다.**
+
+```
+색인된 조각이 남아 있는 분석의 재시도 → 409 ANALYSIS_RETRY_NOT_SUPPORTED
+```
+
+`policy_chunks`를 읽어 조각 존재만 확인하고 거절합니다. 조각을 지우지는 않습니다 — 소유권이 AI 서버에 있다고 보기 때문입니다.
+
+**AI 서버에서 저장 시작 시 `DELETE FROM policy_chunks WHERE analysis_result_id = %s`를 넣어주시면** 이 제한을 풀 수 있습니다. 넣어주시면 백엔드에서 게이트를 제거하겠습니다.
+
+**2. `coverage_item_sources` FK는 지금은 걸림돌이 아닙니다.**
+
+그 테이블이 비어 있습니다. 콜백에 `sources[]`를 보내주시는 것은 확인했는데(`CoverageItemPayload.sources`, `_dedupe_sources`까지), **백엔드 콜백 DTO에 `sources` 필드가 없어 Jackson이 조용히 버리고 있습니다.** 저장 로직도 없습니다. 저희 쪽 누락입니다.
+
+즉 지금 `DELETE`를 막는 것은 FK가 아니라 UNIQUE 제약입니다. `sources` 수신은 별건으로 처리하겠습니다 — 공유 약관 테이블(3-2) 구조가 정해지면 근거가 `policy_chunks`가 아니라 `policy_terms_chunks`를 가리켜야 할 수 있어, 그 결정 뒤에 배선하는 것이 맞다고 봅니다.
+
+**증권은 이 제약과 무관합니다.** 증권 분석은 청킹을 하지 않으므로(`analysis_service.py`의 CERTIFICATE 분기) 조각이 없고, 재시도가 항상 가능합니다. 실제 주 경로라 사용자가 겪는 재시도는 대부분 여기에 해당합니다.
+
 ## 1-4. 콜백에 추가로 담아 주셨으면 하는 것
 
 `analysis_results`에 채울 자리가 있는데 비어 있는 컬럼들입니다.

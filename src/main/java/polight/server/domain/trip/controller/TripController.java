@@ -1,12 +1,15 @@
 package polight.server.domain.trip.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Encoding;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import polight.server.domain.trip.dto.TripCreateRequest;
@@ -52,6 +56,13 @@ public class TripController {
 
           응답의 trip.id 와 document.id 로 이어서 분석 시작 API를 호출합니다.
           """)
+  @io.swagger.v3.oas.annotations.parameters.RequestBody(
+      content =
+          @Content(
+              mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+              encoding =
+                  @Encoding(name = "trip", contentType = MediaType.APPLICATION_JSON_VALUE)))
+  @ResponseStatus(HttpStatus.CREATED)
   public ResponseEntity<TripWithDocumentResponse> createTripWithDocument(
       @AuthenticationPrincipal UUID userId,
       @Valid @RequestPart("trip") TripCreateRequest trip,

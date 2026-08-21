@@ -1,5 +1,6 @@
 package polight.server.domain.rag.service;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -27,10 +28,6 @@ public class RagSearchScopeService {
     return policyChunkRepository.findCompletedChunksByUserIdAndTripId(userId, tripId);
   }
 
-  // 3. 특정 사용자가 가입한 특정 보험 계약 하나의 청크만 조회한다.
-  public List<PolicyChunk> findPolicyScopedChunks(UUID userId, UUID policyId) {
-    return policyChunkRepository.findCompletedChunksByUserIdAndPolicyId(userId, policyId);
-  }
 
   // 4. 특정 AnalysisResult에서 생성된 청크만 조회한다.
   public List<PolicyChunk> findAnalysisScopedChunks(UUID userId, UUID analysisResultId) {
@@ -40,5 +37,19 @@ public class RagSearchScopeService {
   // 5. 특정 사용자의 특정 보험 문서 청크만 조회한다.
   public List<PolicyChunk> findDocumentScopedChunks(UUID userId, UUID documentId) {
     return policyChunkRepository.findCompletedChunksByUserIdAndDocumentId(userId, documentId);
+  }
+
+  /**
+   * 6. 주어진 id 중 이 사용자 소유인 청크만 조회한다.
+   *
+   * <p>챗봇 답변의 근거에 조항 위치를 채울 때 쓴다. id를 AI 서버가 돌려주므로 소유자 조건 없이 조회하면 남의 약관 조항 제목이 응답에 실릴 수 있다.
+   * 검색 범위는 이미 요청에서 사용자별로 좁혀 보내지만, 응답을 그대로 믿지 않고 한 번 더 거른다.
+   */
+  public List<PolicyChunk> findOwnedChunks(UUID userId, Collection<UUID> chunkIds) {
+    if (chunkIds.isEmpty()) {
+      return List.of();
+    }
+
+    return policyChunkRepository.findByIdInAndUserId(chunkIds, userId);
   }
 }

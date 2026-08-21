@@ -42,7 +42,13 @@ public enum ErrorCode {
 
   // 분석
   ANALYSIS_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "분석 결과를 찾을 수 없습니다."),
-  AI_ANALYSIS_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "AI 서버에 분석을 요청하지 못했습니다.");
+  AI_ANALYSIS_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "AI 서버에 분석을 요청하지 못했습니다."),
+  ANALYSIS_RETRY_NOT_SUPPORTED(
+      HttpStatus.CONFLICT, "이 문서는 분석을 다시 시작할 수 없습니다. 문서를 새로 올려 주세요."),
+
+  // 챗봇
+  CHAT_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "대화 세션을 찾을 수 없습니다."),
+  AI_CHAT_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "AI 서버에서 답변을 받지 못했습니다.");
 
   private final HttpStatus status;
   private final String message;

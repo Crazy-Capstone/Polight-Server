@@ -21,7 +21,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import polight.server.domain.common.entity.BaseTimeEntity;
-import polight.server.domain.policy.entity.Policy;
 import polight.server.domain.trip.entity.Trip;
 import polight.server.domain.user.entity.User;
 
@@ -45,10 +44,6 @@ public class ChatSession extends BaseTimeEntity {
   @JoinColumn(name = "trip_id")
   private Trip trip;
 
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "policy_id")
-  private Policy policy;
-
   @Column(nullable = false, length = 100)
   private String title;
 
@@ -66,18 +61,26 @@ public class ChatSession extends BaseTimeEntity {
   public ChatSession(
       User user,
       Trip trip,
-      Policy policy,
       String title,
       ChatSessionStatus status,
       LocalDateTime startedAt,
       LocalDateTime lastActiveAt) {
     this.user = user;
     this.trip = trip;
-    this.policy = policy;
     this.title = title;
     this.status = status == null ? ChatSessionStatus.OPEN : status;
     this.startedAt = startedAt;
     this.lastActiveAt = lastActiveAt;
+  }
+
+  /**
+   * 마지막 활동 시각을 지금으로 옮긴다.
+   *
+   * <p>{@link #preUpdate()}가 있지만 그것만으로는 갱신되지 않는다. JPA는 변경된 필드가 있을 때만 UPDATE를 내보내므로, 메시지만 추가하고
+   * 세션을 건드리지 않으면 콜백 자체가 호출되지 않는다.
+   */
+  public void touch() {
+    this.lastActiveAt = LocalDateTime.now();
   }
 
   @PrePersist
