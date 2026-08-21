@@ -1,14 +1,14 @@
 # 약관 저장소 분리 — AI 서버 싱크
 
-> 기준: `claude/policy-terms-refactor-v33t5n` @ 7c05c2c · 2026-08-21 · PR #36
-> 근거: `V7__add_policy_terms.sql`, `V8__link_analysis_to_policy_terms.sql`, `V9__separate_terms_coverages_from_coverage_items.sql`
+> 기준: `claude/policy-terms-refactor-v33t5n` @ d03e0d9 · 2026-08-21 · PR #36
+> 근거: `V7` ~ `V11` 마이그레이션 (`db/migration/`)
 > 아래 스키마 표는 마이그레이션을 빈 DB에 적용한 뒤 `information_schema`에서 그대로 뽑은 값입니다.
 
 `BACKEND_REPLY_2` 1-7에서 요청하신 **`policy_terms` INSERT 권한**을 여는 작업입니다. 요청하신 것보다 테이블이 두 개 더 생겼고, **그쪽에서 쓰기로 하신 값 중 하나가 지금 스키마에서 거부됩니다.** 그것부터 읽어 주세요.
 
 ---
 
-## 🔴 지금 바로 확인이 필요한 것 3가지
+## 🔴 지금 바로 확인이 필요한 것 4가지
 
 ### ① `source = 'SEEDED'`는 INSERT가 실패합니다
 
@@ -50,6 +50,23 @@ WARN  담보 콜백에 약관에서 나온 값이 3건 실려 있어 저장하�
 이 값들은 이제 사용자의 담보가 아니라 **약관의 보장 규칙**에 매달립니다(아래 4절). 증권 경로는 원래 이 값들을 보내지 않으니(`to_payloads`가 채우지 않습니다) 영향이 없고, **약관 경로만 목적지가 바뀝니다.**
 
 조용히 버리지 않고 경고를 남기는 이유는, 계약이 어긋난 사실이 로그에 드러나게 하기 위해서입니다.
+
+### ④ `policies` 테이블을 없앴습니다 (V11)
+
+**런타임 영향은 없습니다.** 그쪽 `app/`은 이 테이블을 읽지도 쓰지도 않고, `policy_chunks.policy_id` **컬럼은 그대로 남겼습니다.** `pg_mapper`의 `COLUMNS`에 그 이름이 있어서, 지우면 pgvector 저장소로 전환하는 순간 `column does not exist`로 적재가 통째로 실패하거든요. FK 제약만 뗐고 값은 계속 null을 넣으시면 됩니다.
+
+없앤 이유는 그쪽이 겪은 그 버그입니다. `pg_repository`의 스코프 필터가 `policy_id`로 조인하다 "`= NULL`은 아무 행과도 일치하지 않는다"로 검색이 조용히 0건을 반환했던 것 — 근본 원인이 **백엔드가 이 테이블을 영원히 채우지 않을 것**이었습니다. 채우려면 `trip_id` NOT NULL 불일치, `display_name` 생성 규칙, `status` 전이 주체, 증권번호 암호화 수단을 다 정해야 하는데 그게 필요한 기능(만기 알림, "내 보험" 목록)이 로드맵에 없습니다. 그래서 항상 null인 FK를 네 테이블에 남겨두는 대신 지웠습니다.
+
+보험 정보는 `analysis_results`가 갖습니다 — 보험사·상품명(V8), 보험기간(V10).
+
+**그쪽에서 고칠 것 두 개** (둘 다 로컬 개발용):
+
+| 파일 | 할 일 |
+| --- | --- |
+| `docker/initdb/01_schema.sql` | `policies` 테이블과 `analysis_results`·`policy_documents`·`chat_sessions`의 `policy_id` 제거. `policy_chunks.policy_id`는 FK만 떼고 컬럼 유지 |
+| `scripts/verify_pgvector.py` | `INSERT INTO policies` 제거 (FK가 없어져 상위 행이 필요 없습니다) |
+
+`AnalysisStartRequest.policy_id` / `ChunkScope.policy_id`는 그대로 두셔도 됩니다. 백엔드가 원래 안 보냈고 컬럼도 남아 있어 무해합니다. 정리하실 거면 지우셔도 되고요.
 
 ---
 
@@ -239,7 +256,11 @@ NONE      그 외 전부 — 연결하지 않음
 
 표기 차이는 정규화해서 흡수합니다. `삼성화재해상보험(주)` = `삼성화재해상보험 주식회사` = `삼성화재해상보험㈜`. 공백·괄호·대소문자도 무시합니다. **다만 유사도 비교는 하지 않습니다** — `해외여행보험`과 `해외여행보험(실속형)`은 다른 상품으로 봅니다.
 
+기준일은 **증권의 보험 시작일**입니다(V10에서 콜백의 `startDate`를 받기 시작했습니다). 못 읽어 비어 있으면 여행 시작일로 내려가고, 그것도 없으면 최신 개정판을 추측으로 고릅니다.
+
 > **`effective_date`를 꼭 채워 주세요.** 같은 상품의 개정판이 둘 이상인데 `effective_date`가 비어 있으면 어느 것인지 가릴 수 없어 **연결이 통째로 끊깁니다.** 개정판이 하나뿐이면 없어도 됩니다.
+>
+> 짝이 되는 부탁으로, **증권의 `startDate`를 최대한 읽어 주세요.** 개정판이 쌓이기 시작하면 이 값이 정확도를 가릅니다. 2026-02에 가입해 2026-08에 떠나는 증권은 2026-01 개정판을 적용받는데, 보험 시작일이 없으면 여행 시작일(2026-08)로 판단해 2026-07 개정판을 고르게 됩니다.
 
 ### 6-2. 담보 → 보장 규칙 (`coverage_items.terms_coverage_id`)
 
@@ -280,9 +301,11 @@ DB DEFAULT가 `TERMS`였는데 JPA는 항상 명시값을 보내 실제로는 `C
 
 `BACKEND_REPLY_3` 회신 요청 #5로 계속 올려주셨는데 **V6에서 이미 추가됐습니다**(`idx_policy_chunks_document_id`). 확인해 보세요.
 
-### `startDate` / `endDate`는 아직 받지 않습니다
+### `startDate` / `endDate` — 이제 받습니다 (V10)
 
-콜백에 보내주고 계신 것을 확인했습니다(`analysis_service.py:305`, `schemas/analysis.py:163`). 다만 백엔드 DTO에 필드가 없어 지금은 `raw_result_json`에만 남고 버려집니다. **400은 나지 않습니다**(unknown property 무시). 받는 작업은 다음 PR입니다. 받으면 `policies` 행을 만들 수 있고, 개정판 기준일도 여행 시작일 대신 실제 보험 시작일을 쓸 수 있습니다.
+보내주고 계신 것을 확인하고(`analysis_service.py:305`, `schemas/analysis.py:163`) 받도록 붙였습니다. `analysis_results.insurance_start_date` / `insurance_end_date`에 저장되고, 약관 개정판을 고르는 기준일로 씁니다(6-1).
+
+형식은 지금 그대로 `YYYY-MM-DD`면 됩니다. 값이 없어도 400은 나지 않습니다 — 기준일이 여행 시작일로 내려갈 뿐입니다.
 
 ### `policy_chunks` 존치 — 결정이 필요합니다
 
@@ -291,7 +314,7 @@ DB DEFAULT가 `TERMS`였는데 JPA는 항상 명시값을 보내 실제로는 `C
 - **A안** 개인 약관도 `policy_terms`(UNVERIFIED) — 검색 코드가 한 테이블만 보면 되고, 승격이 컬럼 하나 바꾸는 일이 됩니다
 - **B안** 그쪽 설계대로 두 테이블 — 백엔드가 UNVERIFIED 경로를 걷어냅니다
 
-**A안을 제안**하지만 검색 구현 부담은 그쪽이 더 잘 아실 테니 정해서 알려주세요. `policy_chunks` 자체는 아직 지우지 않습니다 — 최근 추가된 재시도 게이트가 조각 존재 확인에 쓰고 있습니다.
+**A안을 제안**하지만 검색 구현 부담은 그쪽이 더 잘 아실 테니 정해서 알려주세요. `policy_chunks` 테이블 자체는 아직 지우지 않습니다 — 최근 추가된 재시도 게이트가 조각 존재 확인에 쓰고 있고, 무엇보다 그쪽이 INSERT하는 테이블이라 합의 없이 건드리지 않습니다.
 
 ---
 
@@ -304,6 +327,7 @@ DB DEFAULT가 `TERMS`였는데 JPA는 항상 명시값을 보내 실제로는 `C
 | 3 | **`policy_terms_coverages` 적재 일정** (4절) | 보장 상세의 면책·서류가 계속 빈 채로 나감 |
 | 4 | 개정판이 둘 이상인 상품에 `effective_date`를 채울 수 있는지 (6-1) | 그 상품은 약관 연결이 끊김 |
 | 5 | `policy_chunks` A안 / B안 (7절) | 개인 약관 경로 이중 구현 |
+| 6 | 로컬 스키마 사본·`verify_pgvector.py`의 `policies` 정리 (④) | 로컬 DB가 운영과 어긋남 |
 
 1·3번이 급합니다. 나머지는 그쪽 대기 없이 저희가 진행합니다.
 
