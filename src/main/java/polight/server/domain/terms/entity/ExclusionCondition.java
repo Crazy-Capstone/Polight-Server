@@ -1,4 +1,4 @@
-package polight.server.domain.analysis.entity;
+package polight.server.domain.terms.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -24,7 +24,7 @@ import polight.server.domain.common.entity.BaseTimeEntity;
 @Entity
 @Table(
     name = "exclusion_conditions",
-    indexes = @Index(name = "idx_exclusion_conditions_coverage_sort", columnList = "coverage_item_id,sort_order"))
+    indexes = @Index(name = "idx_exclusion_conditions_terms_coverage_sort", columnList = "terms_coverage_id,sort_order"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ExclusionCondition extends BaseTimeEntity {
 
@@ -33,8 +33,8 @@ public class ExclusionCondition extends BaseTimeEntity {
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "coverage_item_id", nullable = false)
-  private CoverageItem coverageItem;
+  @JoinColumn(name = "terms_coverage_id", nullable = false)
+  private PolicyTermsCoverage termsCoverage;
 
   @Column(nullable = false, length = 200)
   private String title;
@@ -54,13 +54,13 @@ public class ExclusionCondition extends BaseTimeEntity {
 
   @Builder
   public ExclusionCondition(
-      CoverageItem coverageItem,
+      PolicyTermsCoverage termsCoverage,
       String title,
       String description,
       String sourceText,
       ExclusionConditionSeverity severity,
       Integer sortOrder) {
-    this.coverageItem = Objects.requireNonNull(coverageItem, "coverageItem은 필수입니다.");
+    this.termsCoverage = Objects.requireNonNull(termsCoverage, "termsCoverage는 필수입니다.");
     this.title = Objects.requireNonNull(title, "title은 필수입니다.");
     this.description = description;
     this.sourceText = sourceText;

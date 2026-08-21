@@ -1,4 +1,4 @@
-package polight.server.domain.analysis.entity;
+package polight.server.domain.terms.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,33 +19,37 @@ import lombok.NoArgsConstructor;
 @Getter
 @Entity
 @Table(
-    name = "required_documents",
-    indexes = @Index(name = "idx_required_documents_coverage_sort", columnList = "coverage_item_id,sort_order"))
+    name = "coverage_detail_items",
+    indexes = @Index(name = "idx_coverage_detail_items_terms_coverage_sort", columnList = "terms_coverage_id,sort_order"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class RequiredDocument {
+public class CoverageDetailItem {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "coverage_item_id", nullable = false)
-  private CoverageItem coverageItem;
+  @JoinColumn(name = "terms_coverage_id", nullable = false)
+  private PolicyTermsCoverage termsCoverage;
 
-  @Column(name = "document_name", nullable = false, length = 200)
-  private String documentName;
+  @Column(nullable = false, length = 200)
+  private String title;
 
-  @Column(name = "is_mandatory", nullable = false)
-  private boolean mandatory;
+  @Column(length = 500)
+  private String subtitle;
+
+  @Column(name = "is_covered", nullable = false)
+  private boolean covered;
 
   @Column(name = "sort_order", nullable = false)
   private int sortOrder;
 
   @Builder
-  public RequiredDocument(CoverageItem coverageItem, String documentName, boolean mandatory, Integer sortOrder) {
-    this.coverageItem = coverageItem;
-    this.documentName = documentName;
-    this.mandatory = mandatory;
+  public CoverageDetailItem(PolicyTermsCoverage termsCoverage, String title, String subtitle, boolean covered, Integer sortOrder) {
+    this.termsCoverage = termsCoverage;
+    this.title = title;
+    this.subtitle = subtitle;
+    this.covered = covered;
     this.sortOrder = sortOrder == null ? 0 : sortOrder;
   }
 }

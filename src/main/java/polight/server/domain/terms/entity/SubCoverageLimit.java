@@ -1,4 +1,4 @@
-package polight.server.domain.analysis.entity;
+package polight.server.domain.terms.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -20,7 +20,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(
     name = "sub_coverage_limits",
-    indexes = @Index(name = "idx_sub_coverage_limits_coverage_sort", columnList = "coverage_item_id,sort_order"))
+    indexes = @Index(name = "idx_sub_coverage_limits_terms_coverage_sort", columnList = "terms_coverage_id,sort_order"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SubCoverageLimit {
 
@@ -29,8 +29,8 @@ public class SubCoverageLimit {
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "coverage_item_id", nullable = false)
-  private CoverageItem coverageItem;
+  @JoinColumn(name = "terms_coverage_id", nullable = false)
+  private PolicyTermsCoverage termsCoverage;
 
   @Column(nullable = false, length = 100)
   private String label;
@@ -52,14 +52,14 @@ public class SubCoverageLimit {
 
   @Builder
   public SubCoverageLimit(
-      CoverageItem coverageItem,
+      PolicyTermsCoverage termsCoverage,
       String label,
       String value,
       Long limitAmount,
       String limitCurrency,
       String description,
       Integer sortOrder) {
-    this.coverageItem = coverageItem;
+    this.termsCoverage = termsCoverage;
     this.label = label;
     this.value = value;
     this.limitAmount = limitAmount;
