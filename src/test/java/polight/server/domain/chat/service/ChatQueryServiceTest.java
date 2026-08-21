@@ -52,6 +52,7 @@ class ChatQueryServiceTest {
   private final UUID userId = UUID.randomUUID();
   private final UUID tripId = UUID.randomUUID();
   private final UUID sessionId = UUID.randomUUID();
+  private final UUID termsId = UUID.randomUUID();
 
   @BeforeEach
   void setUp() {
@@ -69,7 +70,7 @@ class ChatQueryServiceTest {
     given(chatMessageService.loadRecentHistory(sessionId)).willReturn(List.of());
     given(chatMessageMapper.toHistory(anyList())).willReturn(List.of());
     given(certificateContextProvider.load(userId, tripId))
-        .willReturn(new CertificateContext(List.of(), false));
+        .willReturn(new CertificateContext(termsId, List.of(), false));
     given(ragQueryClient.query(any())).willReturn(answer("보상됩니다."));
     given(chatMessageMapper.toSources(any(), anyList())).willReturn(List.of());
     given(chatMessageService.appendAssistantMessage(eq(sessionId), any(), any()))
@@ -102,7 +103,9 @@ class ChatQueryServiceTest {
     given(certificateContextProvider.load(userId, tripId))
         .willReturn(
             new CertificateContext(
-                List.of(new RagQueryRequest.Coverage("해외의료비", true, 30_000_000L, "KRW")), false));
+                termsId,
+                List.of(new RagQueryRequest.Coverage("해외의료비", true, 30_000_000L, "KRW")),
+                false));
 
     service.ask(userId, tripId, new ChatQuestionRequest("  병원비 얼마까지요?  "));
 
@@ -113,6 +116,8 @@ class ChatQueryServiceTest {
     assertThat(sent.userId()).isEqualTo(userId);
     assertThat(sent.tripId()).isEqualTo(tripId);
     assertThat(sent.sessionId()).isEqualTo(sessionId);
+    // 증권 분석이 매칭해 둔 약관에서만 검색한다.
+    assertThat(sent.termsId()).isEqualTo(termsId);
     assertThat(sent.question()).isEqualTo("병원비 얼마까지요?");
     // 챗봇 화면에 문서를 고르는 UI가 없다. null 이면 AI 가 여행 단위로 검색한다.
     assertThat(sent.documentId()).isNull();
@@ -123,6 +128,34 @@ class ChatQueryServiceTest {
     assertThat(sent.coverages()).hasSize(1);
     assertThat(sent.coverages().get(0).name()).isEqualTo("해외의료비");
     assertThat(sent.coveragesComplete()).isFalse();
+  }
+
+  @Test
+  void skipsAiCallAndAnswersWithoutGroundsWhenNoTermsLinked() {
+    given(certificateContextProvider.load(userId, tripId))
+        .willReturn(new CertificateContext(null, List.of(), false));
+    given(chatMessageService.appendAssistantMessage(sessionId, ChatQueryService.NO_TERMS_ANSWER, null))
+        .willReturn(assistantMessage(ChatQueryService.NO_TERMS_ANSWER));
+
+    ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("병원비 나와요?"));
+
+    // 약관을 지목하지 않고 검색하면 사지도 않은 상품의 조항으로 "보상됩니다"가 나간다.
+    verify(ragQueryClient, org.mockito.Mockito.never()).query(any());
+    assertThat(response.answer()).isEqualTo(ChatQueryService.NO_TERMS_ANSWER);
+    assertThat(response.sources()).isEmpty();
+  }
+
+  @Test
+  void stillSavesQuestionWhenNoTermsLinked() {
+    given(certificateContextProvider.load(userId, tripId))
+        .willReturn(new CertificateContext(null, List.of(), false));
+    given(chatMessageService.appendAssistantMessage(sessionId, ChatQueryService.NO_TERMS_ANSWER, null))
+        .willReturn(assistantMessage(ChatQueryService.NO_TERMS_ANSWER));
+
+    service.ask(userId, tripId, new ChatQuestionRequest("병원비 나와요?"));
+
+    // 질문만 사라지면 화면에서 방금 보낸 메시지가 없어진 것처럼 보인다.
+    verify(chatMessageService).appendUserMessage(sessionId, "병원비 나와요?");
   }
 
   @Test

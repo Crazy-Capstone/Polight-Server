@@ -12,6 +12,8 @@ import java.util.UUID;
  * <p>AI 서버는 무상태다. 대화 이력을 조회하지 않고 이 요청에 실린 것만 본다. {@code chat_messages} 조회 권한을 AI 계정에 주지 않기 위한
  * 결정이고, 그래서 이력을 자르는 책임이 이쪽에 있다.
  *
+ * @param termsId 검색할 약관. 증권 분석이 매칭해 둔 {@code analysis_results.matched_terms_id}다. 이 값이 없으면 AI를 부르지
+ *     않는다 -- 어느 약관을 뒤질지 모르는 채로 검색하면 가입하지 않은 상품의 조항으로 답이 나간다
  * @param documentId 검색 범위. {@code null}이면 AI가 {@code tripId}로 여행 전체 약관을 검색한다. 챗봇 화면에 문서를 고르는 UI가
  *     없으므로 지금은 항상 {@code null}이다
  * @param policyId 항상 {@code null}이다. {@code policies} 행을 만드는 경로가 서버에 없다. AI 서버도 이 값으로 필터하지 않는다
@@ -25,6 +27,7 @@ import java.util.UUID;
 public record RagQueryRequest(
     UUID userId,
     UUID tripId,
+    UUID termsId,
     UUID documentId,
     UUID policyId,
     UUID sessionId,
