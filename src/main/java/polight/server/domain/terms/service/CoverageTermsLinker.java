@@ -1,7 +1,9 @@
 package polight.server.domain.terms.service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +14,7 @@ import polight.server.domain.analysis.entity.CoverageItem;
 import polight.server.domain.terms.entity.PolicyTerms;
 import polight.server.domain.terms.entity.PolicyTermsCoverage;
 import polight.server.domain.terms.repository.PolicyTermsCoverageRepository;
+import polight.server.domain.terms.service.CoverageTermsLinkSummary.UnlinkedCoverage;
 
 /**
  * 사용자가 가입한 담보를 약관의 보장 규칙에 붙인다.
@@ -31,11 +34,16 @@ import polight.server.domain.terms.repository.PolicyTermsCoverageRepository;
  *   증권 담보   해외여행중 상해의료비(3천만원)
  * </pre>
  *
- * <p>그래서 두 단계로 본다. 표기를 다듬어 완전히 같으면({@link CoverageTermsMatchStage#EXACT}) 붙이고, 담보명이 규칙명을
- * 통째로 품고 있으면({@link CoverageTermsMatchStage#QUALIFIED}) 붙인다.
+ * <p>그래서 세 단계로 본다. 표기를 다듬어 완전히 같으면({@link CoverageTermsMatchStage#EXACT}) 붙이고, 담보명이 규칙명을
+ * 통째로 품고 있으면({@link CoverageTermsMatchStage#QUALIFIED}) 붙인다. 이름이 아예 겹치지 않는 경우를 위해 마지막으로 표준
+ * 분류({@link CoverageTermsMatchStage#CATEGORY})를 본다 -- 증권 "해외의료실비보장"과 약관 "기본형 해외여행 실손의료비"는 같은
+ * 보장인데 글자가 하나도 겹치지 않는다.
  *
  * <p><b>어느 단계든 후보가 둘 이상이면 붙이지 않는다.</b> 잘못 붙은 규칙은 붙지 않은 것보다 나쁘다 -- 화면에는 다른 담보의 면책 조항이 이 담보의
  * 것으로 표시되고, 사용자는 그것을 보고 받을 수 있는 보험금을 포기한다. 붙지 않으면 최소한 약관 정보가 없다는 사실이 드러난다.
+ *
+ * <p><b>이름이 모호해서 못 붙은 담보는 category 단계로 내려보내지 않는다.</b> 이름으로 가리지 못한 것을 그보다 거친 분류로 가를 수는 없다.
+ * 그렇게 고른 하나는 근거가 아니라 동전 던지기이고, 그 결과로 다른 조항의 면책이 이 담보의 것으로 화면에 나간다.
  */
 @Slf4j
 @Service
@@ -73,7 +81,7 @@ public class CoverageTermsLinker {
           "약관이 연결되지 않아 담보 규칙 연결을 건너뜁니다: analysisResultId={}, 담보 {}건",
           analysisResult.getId(),
           items.size());
-      return new CoverageTermsLinkSummary(items.size(), 0, 0, titlesOf(items));
+      return notLinked(items);
     }
 
     List<PolicyTermsCoverage> rules =
@@ -88,56 +96,94 @@ public class CoverageTermsLinker {
           terms.getId(),
           terms.getInsurerName(),
           terms.getProductName());
-      return new CoverageTermsLinkSummary(items.size(), 0, 0, titlesOf(items));
+      return notLinked(items);
     }
+
+    warnOnNonStandardCategories(terms, items, rules);
 
     int exact = 0;
     int qualified = 0;
-    List<String> unlinked = new ArrayList<>();
+    int category = 0;
+    List<UnlinkedCoverage> unlinked = new ArrayList<>();
 
     for (CoverageItem item : items) {
-      CoverageTermsMatchStage stage = linkOne(item, rules);
-      switch (stage) {
+      LinkOutcome outcome = linkOne(item, rules);
+      switch (outcome.stage()) {
         case EXACT -> exact++;
         case QUALIFIED -> qualified++;
-        case NONE -> unlinked.add(item.getTitle());
+        case CATEGORY -> category++;
+        case NONE -> unlinked.add(new UnlinkedCoverage(item.getTitle(), outcome.reason()));
       }
     }
 
     CoverageTermsLinkSummary summary =
-        new CoverageTermsLinkSummary(items.size(), exact, qualified, List.copyOf(unlinked));
+        new CoverageTermsLinkSummary(
+            items.size(), exact, qualified, category, List.copyOf(unlinked));
     logSummary(analysisResult.getId(), terms, summary);
     return summary;
   }
 
-  private CoverageTermsMatchStage linkOne(CoverageItem item, List<PolicyTermsCoverage> rules) {
+  private LinkOutcome linkOne(CoverageItem item, List<PolicyTermsCoverage> rules) {
     String itemTitle = InsuranceNameNormalizer.normalize(item.getTitle());
     if (itemTitle == null) {
-      item.linkTermsCoverage(null);
-      return CoverageTermsMatchStage.NONE;
+      return unlink(item, CoverageTermsUnlinkReason.NOT_FOUND);
     }
 
     List<PolicyTermsCoverage> exact =
         rules.stream().filter(rule -> itemTitle.equals(normalizedTitleOf(rule))).toList();
     if (exact.size() == 1) {
       item.linkTermsCoverage(exact.get(0));
-      return CoverageTermsMatchStage.EXACT;
+      return LinkOutcome.linked(CoverageTermsMatchStage.EXACT);
     }
     if (exact.size() > 1) {
-      // 같은 이름의 규칙이 여럿이다. 어느 조항을 말하는지 가릴 수 없으므로 붙이지 않는다.
-      item.linkTermsCoverage(null);
-      return CoverageTermsMatchStage.NONE;
+      // 같은 이름의 규칙이 여럿이다. 어느 조항을 말하는지 가릴 수 없으므로 붙이지 않고,
+      // category 단계로도 내려보내지 않는다.
+      return unlink(item, CoverageTermsUnlinkReason.AMBIGUOUS_TITLE);
     }
 
     List<PolicyTermsCoverage> qualified =
         rules.stream().filter(rule -> qualifies(itemTitle, normalizedTitleOf(rule))).toList();
     if (qualified.size() == 1) {
       item.linkTermsCoverage(qualified.get(0));
-      return CoverageTermsMatchStage.QUALIFIED;
+      return LinkOutcome.linked(CoverageTermsMatchStage.QUALIFIED);
+    }
+    if (qualified.size() > 1) {
+      // 담보명이 여러 규칙명을 품은 경우다(예: "휴대품손해 및 배상책임"). 어느 쪽 조항을 붙여도
+      // 나머지 절반이 빠지므로 가릴 수 없는 것으로 본다.
+      return unlink(item, CoverageTermsUnlinkReason.AMBIGUOUS_TITLE);
     }
 
-    item.linkTermsCoverage(null);
-    return CoverageTermsMatchStage.NONE;
+    return linkByCategory(item, rules);
+  }
+
+  /**
+   * 마지막 단계. 표준 분류가 같은 규칙이 딱 하나일 때만 붙인다.
+   *
+   * <p>모르는 어휘가 와도 비교에서 빼지 않는다. 양쪽이 같은 값을 쓰고 있다면 그 연결은 맞고, 어휘가 어긋난 사실은 따로 로그로 드러난다. 여기서
+   * 걸러버리면 어휘가 하나 늘어난 날 그 담보들의 연결이 통째로 사라진다.
+   */
+  private LinkOutcome linkByCategory(CoverageItem item, List<PolicyTermsCoverage> rules) {
+    String itemCategory = StandardCoverageCategories.normalize(item.getCategory());
+    if (itemCategory == null) {
+      // 약관 저장소가 생기기 전에 분석된 담보는 category 가 비어 있다. 이름으로 못 붙었으면 거기까지다.
+      return unlink(item, CoverageTermsUnlinkReason.NOT_FOUND);
+    }
+
+    List<PolicyTermsCoverage> candidates =
+        rules.stream()
+            .filter(
+                rule ->
+                    itemCategory.equals(StandardCoverageCategories.normalize(rule.getCategory())))
+            .toList();
+
+    if (candidates.size() == 1) {
+      item.linkTermsCoverage(candidates.get(0));
+      return LinkOutcome.linked(CoverageTermsMatchStage.CATEGORY);
+    }
+    if (candidates.size() > 1) {
+      return unlink(item, CoverageTermsUnlinkReason.AMBIGUOUS_CATEGORY);
+    }
+    return unlink(item, CoverageTermsUnlinkReason.NOT_FOUND);
   }
 
   /**
@@ -165,23 +211,72 @@ public class CoverageTermsLinker {
     return InsuranceNameNormalizer.normalize(rule.getTitle());
   }
 
-  private List<String> titlesOf(List<CoverageItem> items) {
-    return items.stream().map(CoverageItem::getTitle).toList();
+  private LinkOutcome unlink(CoverageItem item, CoverageTermsUnlinkReason reason) {
+    item.linkTermsCoverage(null);
+    return LinkOutcome.unlinked(reason);
+  }
+
+  /** 담보 전부를 끊은 결과. 사유는 하나뿐이고 로그가 앞줄에 이미 남았다. */
+  private CoverageTermsLinkSummary notLinked(List<CoverageItem> items) {
+    List<UnlinkedCoverage> unlinked =
+        items.stream()
+            .map(item -> new UnlinkedCoverage(item.getTitle(), CoverageTermsUnlinkReason.NOT_FOUND))
+            .toList();
+    return new CoverageTermsLinkSummary(items.size(), 0, 0, 0, unlinked);
+  }
+
+  /**
+   * 합의한 어휘 밖의 category 를 로그로 드러낸다. 연결을 막지는 않는다.
+   *
+   * <p>어휘는 계약이지 런타임 제약이 아니다. 값을 거부하면 어휘가 하나 늘어난 날 연결이 통째로 끊긴다. 대신 어긋난 사실이 사람에게 보여야 하므로
+   * 여기서 한 번 모아 남긴다 -- 담보마다 남기면 로그가 같은 값으로 도배된다.
+   */
+  private void warnOnNonStandardCategories(
+      PolicyTerms terms, List<CoverageItem> items, List<PolicyTermsCoverage> rules) {
+    Set<String> unknown = new LinkedHashSet<>();
+    items.forEach(item -> collectIfNonStandard(item.getCategory(), unknown));
+    rules.forEach(rule -> collectIfNonStandard(rule.getCategory(), unknown));
+
+    if (!unknown.isEmpty()) {
+      log.warn("합의한 어휘 밖의 category 입니다(연결은 그대로 진행): termsId={}, {}", terms.getId(), unknown);
+    }
+  }
+
+  private void collectIfNonStandard(String category, Set<String> unknown) {
+    String normalized = StandardCoverageCategories.normalize(category);
+    if (normalized != null && !StandardCoverageCategories.isStandard(normalized)) {
+      unknown.add(normalized);
+    }
   }
 
   private void logSummary(UUID analysisResultId, PolicyTerms terms, CoverageTermsLinkSummary s) {
     log.info(
-        "담보-약관규칙 연결: analysisResultId={}, termsId={}, {}/{}건 연결(정확 {}, 수식 {})",
+        "담보-약관규칙 연결: analysisResultId={}, termsId={}, {}/{}건 연결(정확 {}, 수식 {}, 분류 {})",
         analysisResultId,
         terms.getId(),
         s.linked(),
         s.total(),
         s.exact(),
-        s.qualified());
+        s.qualified(),
+        s.category());
 
-    if (!s.unlinkedTitles().isEmpty()) {
-      // 붙지 않은 이름은 약관 규칙 적재가 무엇을 빠뜨렸는지 알려주는 유일한 단서다.
-      log.info("연결되지 않은 담보: termsId={}, {}", terms.getId(), s.unlinkedTitles());
+    if (!s.unlinked().isEmpty()) {
+      // 붙지 않은 이름은 약관 규칙 적재가 무엇을 빠뜨렸는지 알려주는 유일한 단서다. 사유를 함께
+      // 남기는 이유는 고쳐야 할 곳이 다르기 때문이다 -- 후보 없음은 적재를 더 하면 되고,
+      // 가릴 수 없음은 이미 적재된 데이터가 어긋났다는 뜻이다.
+      log.info("연결되지 않은 담보: termsId={}, {}", terms.getId(), s.unlinked());
+    }
+  }
+
+  /** @param reason 붙인 경우에는 {@code null}이다 */
+  private record LinkOutcome(CoverageTermsMatchStage stage, CoverageTermsUnlinkReason reason) {
+
+    static LinkOutcome linked(CoverageTermsMatchStage stage) {
+      return new LinkOutcome(stage, null);
+    }
+
+    static LinkOutcome unlinked(CoverageTermsUnlinkReason reason) {
+      return new LinkOutcome(CoverageTermsMatchStage.NONE, reason);
     }
   }
 }

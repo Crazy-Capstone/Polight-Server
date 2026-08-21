@@ -94,6 +94,7 @@ class FastApiRagQueryClientTest {
     return new RagQueryRequest(
         UUID.randomUUID(),
         UUID.randomUUID(),
+        UUID.randomUUID(),
         null,
         null,
         UUID.randomUUID(),
