@@ -104,7 +104,8 @@ class ChatQueryServiceTest {
         .willReturn(
             new CertificateContext(
                 termsId,
-                List.of(new RagQueryRequest.Coverage("해외의료비", true, 30_000_000L, "KRW")),
+                List.of(new RagQueryRequest.Coverage(
+                        "해외의료비", true, 30_000_000L, "KRW", "* 자기부담금 10,000")),
                 false));
 
     service.ask(userId, tripId, new ChatQuestionRequest("  병원비 얼마까지요?  "));
@@ -127,6 +128,8 @@ class ChatQueryServiceTest {
     assertThat(sent.clausePaths()).isEmpty();
     assertThat(sent.coverages()).hasSize(1);
     assertThat(sent.coverages().get(0).name()).isEqualTo("해외의료비");
+    // 자기부담금·물품당 한도는 증권에만 있다. 이게 빠지면 그 질문에 답할 수 없다.
+    assertThat(sent.coverages().get(0).conditions()).isEqualTo("* 자기부담금 10,000");
     assertThat(sent.coveragesComplete()).isFalse();
   }
 

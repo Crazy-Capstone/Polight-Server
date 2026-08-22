@@ -71,11 +71,17 @@ public class CertificateContextProvider {
   /**
    * 담보를 AI가 읽을 형태로 줄인다.
    *
-   * <p>{@code subtitle}·{@code conditions}·면책 조항은 보내지 않는다. AI 쪽 스키마에 필드가 없고, 판단에 필요한 것은 담보명·가입여부·한도
-   * 세 가지다.
+   * <p>{@code conditions}를 함께 보낸다. 자기부담금과 물품당 한도가 그 문구에만 있어, 없으면 "자기부담금 얼마예요?"에 답할 수 없다.
+   * 약관은 "가입금액을 한도로"까지만 적고 실제 금액은 증권에 인쇄된다.
+   *
+   * <p>{@code subtitle}과 면책 조항은 보내지 않는다. 면책은 약관 검색으로 나오는 것이라 프롬프트에 두 번 실을 이유가 없다.
    */
   private static Coverage toCoverage(CoverageItem item) {
     return new Coverage(
-        item.getTitle(), item.isCovered(), item.getLimitAmount(), item.getLimitCurrency());
+        item.getTitle(),
+        item.isCovered(),
+        item.getLimitAmount(),
+        item.getLimitCurrency(),
+        item.getConditions());
   }
 }

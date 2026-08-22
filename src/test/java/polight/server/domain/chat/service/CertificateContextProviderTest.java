@@ -67,6 +67,22 @@ class CertificateContextProviderTest {
   }
 
   @Test
+  void sendsConditionsBecauseDeductibleLivesOnlyInTheCertificate() {
+    AnalysisResult analysis = analysis();
+    given(analysisResultRepository.findCompletedCertificateAnalyses(userId, tripId))
+        .willReturn(List.of(analysis));
+    CoverageItem item = coverageItem(analysis, "휴대품손해", CoverageStatus.COVERED, true, 500_000L);
+    setField(item, "conditions", "* 자기부담금 10,000 * 물품당 최대 20만원 한도");
+    given(coverageItemRepository.findByAnalysisResultIdOrderBySortOrderAsc(analysis.getId()))
+        .willReturn(List.of(item));
+
+    List<Coverage> coverages = provider.load(userId, tripId).coverages();
+
+    // 약관은 "가입금액을 한도로"까지만 적는다. 실제 금액은 증권에 인쇄되고 여기로만 전달된다.
+    assertThat(coverages.get(0).conditions()).isEqualTo("* 자기부담금 10,000 * 물품당 최대 20만원 한도");
+  }
+
+  @Test
   void usesMostRecentCertificateAnalysis() {
     AnalysisResult latest = analysis();
     AnalysisResult older = analysis();

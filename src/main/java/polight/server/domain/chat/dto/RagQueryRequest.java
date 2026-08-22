@@ -43,8 +43,15 @@ public record RagQueryRequest(
   /**
    * 가입 담보 1건.
    *
-   * <p>담보명·가입여부·한도만 보낸다. 피보험자 이름·생년월일·증권번호는 LLM에 보낼 이유가 없어 AI 쪽 스키마에도 필드가 없다.
+   * <p>피보험자 이름·생년월일·증권번호는 보내지 않는다. LLM에 넘길 이유가 없고 AI 쪽 스키마에도 필드가 없다.
+   *
+   * @param conditions 증권에 인쇄된 조건 문구 그대로. "자기부담금 10,000", "물품당 최대 20만원 한도" 같은 것이 여기 들어 있어,
+   *     이것이 없으면 자기부담금을 묻는 질문에 답할 수 없다. 약관에는 "가입금액을 한도로"라고만 적혀 있어 증권에서만 얻을 수 있는 값이다
    */
   public record Coverage(
-      String name, boolean subscribed, Long limitAmount, String limitCurrency) {}
+      String name,
+      boolean subscribed,
+      Long limitAmount,
+      String limitCurrency,
+      String conditions) {}
 }
