@@ -127,3 +127,7 @@ logging:
     # 들어오는 요청의 메서드/URI 를 요청마다 한 줄씩 찍는다.
     # 운영에서 로그량이 부담되면 LOGGING_LEVEL_DISPATCHER=INFO 로 끈다.
     org.springframework.web.servlet.DispatcherServlet: ${LOGGING_LEVEL_DISPATCHER:DEBUG}
+
+    # AI 로 나가는 질의에 무엇이 실렸는지 요청마다 한 줄. INFO 로도 termsId·담보 수·이력 수가 남는다.
+    # DEBUG 로 올리면 담보명까지 남는다 -- 증권에서 읽은 상품 정보라 평소에는 내려 둔다.
+    polight.server.domain.chat.client: ${LOGGING_LEVEL_CHAT_CLIENT:INFO}
