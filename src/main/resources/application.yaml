@@ -121,3 +121,9 @@ analysis:
     # check-interval 만 ISO-8601 인 이유: @Scheduled 의 fixedDelayString 은 "PT1M" 또는 밀리초 숫자만
     # 받는다. "1m" 은 파싱하지 못한다. after 는 Duration 으로 바인딩되므로 "10m" 이 그대로 통한다.
     check-interval: ${ANALYSIS_TIMEOUT_CHECK_INTERVAL:PT1M}
+
+logging:
+  level:
+    # 들어오는 요청의 메서드/URI 를 요청마다 한 줄씩 찍는다.
+    # 운영에서 로그량이 부담되면 LOGGING_LEVEL_DISPATCHER=INFO 로 끈다.
+    org.springframework.web.servlet.DispatcherServlet: ${LOGGING_LEVEL_DISPATCHER:DEBUG}
