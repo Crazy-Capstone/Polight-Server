@@ -1,5 +1,6 @@
 package polight.server.domain.chat.client;
 
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,6 +9,7 @@ import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import polight.server.domain.chat.dto.RagQueryRequest;
+import polight.server.domain.chat.dto.RagQueryRequest.Coverage;
 import polight.server.domain.chat.dto.RagQueryResponse;
 import polight.server.global.exception.BaseException;
 import polight.server.global.exception.ErrorCode;
@@ -63,6 +65,43 @@ public class FastApiRagQueryClient implements RagQueryClient {
   }
 
   /**
+   * 무엇을 실어 보내는지 한 줄로 남긴다.
+   *
+   * <p>지금까지는 실패한 요청만 로그가 남아, 성공한 요청에 무엇이 실렸는지 확인할 방법이 서버 쪽에 없었다. 그래서 "그 값이 안 온다"는 말을
+   * 받으면 코드를 읽어 반박하는 수밖에 없었다. 여기 남는 세 값이 그 논쟁을 끝낸다 -- 검색 범위({@code termsId}), 개인화 재료(담보 수),
+   * 멀티턴({@code historyTurns}).
+   *
+   * <p>질문과 대화 이력 본문은 남기지 않는다. 사용자가 쓴 문장이라 서버 로그에 쌓아 둘 이유가 없고, 개수만으로 원인이 갈린다.
+   *
+   * <p>담보명까지 봐야 하면 {@code DEBUG}로 내린다. 이름은 증권에서 읽은 상품 정보라 평소에 남기지 않는다.
+   */
+  private void logOutgoing(RagQueryRequest request) {
+    List<Coverage> coverages = request.coverages();
+    int coverageCount = coverages == null ? 0 : coverages.size();
+
+    log.info(
+        "AI 질의 전송: sessionId={}, termsId={}, 담보 {}건, coveragesComplete={}, historyTurns={}",
+        request.sessionId(),
+        request.termsId(),
+        coverageCount,
+        request.coveragesComplete(),
+        request.history() == null ? 0 : request.history().size());
+
+    if (log.isDebugEnabled() && coverageCount > 0) {
+      log.debug(
+          "AI 질의 담보: sessionId={}, {}",
+          request.sessionId(),
+          coverages.stream().map(FastApiRagQueryClient::describe).toList());
+    }
+  }
+
+  /** 담보 한 건을 로그용으로 줄인다. */
+  private static String describe(Coverage coverage) {
+    return "%s(가입=%s, 한도=%s)"
+        .formatted(coverage.name(), coverage.subscribed(), coverage.limitAmount());
+  }
+
+  /**
    * AI가 에러 상태를 돌려준 사실을 한 줄로 남긴다.
    *
    * <p>이 로그가 없으면 원인이 502 스택의 {@code Caused by} 안에 파묻힌다. 실제로 그것을 찾느라 로그를 수십 줄 뒤진 적이 있어 따로 남긴다.
@@ -101,6 +140,8 @@ public class FastApiRagQueryClient implements RagQueryClient {
   }
 
   private RagQueryResponse send(RagQueryRequest request) {
+    logOutgoing(request);
+
     RagQueryResponse response =
         restClient
             .post()
