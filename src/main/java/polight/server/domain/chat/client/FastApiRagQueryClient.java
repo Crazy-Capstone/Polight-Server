@@ -4,8 +4,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
 import polight.server.domain.chat.dto.RagQueryRequest;
 import polight.server.domain.chat.dto.RagQueryResponse;
 import polight.server.global.exception.BaseException;
@@ -24,6 +25,9 @@ import polight.server.global.security.InternalApiKeyFilter;
 @Slf4j
 @Component
 public class FastApiRagQueryClient implements RagQueryClient {
+
+  /** 로그에 남길 AI 응답 본문의 최대 길이. */
+  private static final int MAX_LOGGED_BODY_LENGTH = 500;
 
   private final RestClient restClient;
   private final String ragPath;
@@ -50,9 +54,37 @@ public class FastApiRagQueryClient implements RagQueryClient {
           request.sessionId(),
           notConnected.getMessage());
       return retry(request);
+    } catch (HttpStatusCodeException rejected) {
+      logRejection(request, rejected);
+      throw new BaseException(ErrorCode.AI_CHAT_REQUEST_FAILED, rejected);
     } catch (RuntimeException exception) {
       throw new BaseException(ErrorCode.AI_CHAT_REQUEST_FAILED, exception);
     }
+  }
+
+  /**
+   * AI가 에러 상태를 돌려준 사실을 한 줄로 남긴다.
+   *
+   * <p>이 로그가 없으면 원인이 502 스택의 {@code Caused by} 안에 파묻힌다. 실제로 그것을 찾느라 로그를 수십 줄 뒤진 적이 있어 따로 남긴다.
+   * 상태코드가 4xx면 계약이 어긋난 것이고 5xx면 AI 내부 문제라, 그 한 글자가 어느 쪽을 봐야 하는지 가른다.
+   *
+   * <p>질문 본문은 남기지 않는다. 사용자가 쓴 문장이라 로그에 쌓아 둘 이유가 없고, 원인 규명에는 상태코드와 AI가 돌려준 본문이면 충분하다.
+   */
+  private void logRejection(RagQueryRequest request, HttpStatusCodeException rejected) {
+    log.warn(
+        "AI 서버가 질의를 거절했습니다: sessionId={}, status={}, historyTurns={}, body={}",
+        request.sessionId(),
+        rejected.getStatusCode(),
+        request.history() == null ? 0 : request.history().size(),
+        abbreviate(rejected.getResponseBodyAsString()));
+  }
+
+  /** 본문이 통째로 로그를 덮지 않게 자른다. 원인을 가리는 것은 대개 앞부분에 있다. */
+  private String abbreviate(String body) {
+    if (body == null || body.length() <= MAX_LOGGED_BODY_LENGTH) {
+      return body;
+    }
+    return body.substring(0, MAX_LOGGED_BODY_LENGTH) + "...(생략)";
   }
 
   private RagQueryResponse retry(RagQueryRequest request) {
@@ -60,6 +92,9 @@ public class FastApiRagQueryClient implements RagQueryClient {
       return send(request);
     } catch (BaseException alreadyClassified) {
       throw alreadyClassified;
+    } catch (HttpStatusCodeException rejected) {
+      logRejection(request, rejected);
+      throw new BaseException(ErrorCode.AI_CHAT_REQUEST_FAILED, rejected);
     } catch (RuntimeException exception) {
       throw new BaseException(ErrorCode.AI_CHAT_REQUEST_FAILED, exception);
     }
