@@ -26,6 +26,53 @@ services:
     networks:
       - polight-network
 
+  redis:
+    image: redis:7-alpine
+    container_name: polight-redis
+    restart: unless-stopped
+
+    # 리프레시 토큰만 담는다. 사용자 한 명당 토큰 하나가 100바이트 남짓이라
+    # 수만 명이 되어도 수 MB 수준이다. 96m 은 그 위에 얹히는 Redis 자체 오버헤드 몫이다.
+    mem_limit: 96m
+
+    # --maxmemory 를 mem_limit 보다 낮게 잡는 이유: 없으면 컨테이너 한도에 먼저 부딪혀
+    # OOM Killer 가 Redis 를 죽이고, 그 순간 전 사용자의 리프레시 토큰이 사라진다.
+    # maxmemory 를 걸면 Redis 가 스스로 판단해 아래 정책대로 처리한다.
+    #
+    # --maxmemory-policy noeviction 이 중요하다. 기본값(noeviction)을 명시해 두는 이유는
+    # allkeys-lru 로 바꾸고 싶은 유혹이 생기기 때문이다. LRU 로 두면 메모리가 찰 때 Redis 가
+    # 살아 있는 리프레시 토큰을 조용히 지우고, 사용자는 이유 없이 로그아웃된다.
+    # noeviction 이면 대신 쓰기가 실패해 로그인 시점에 에러로 드러난다 -- 알아챌 수 있는 실패다.
+    #
+    # --appendonly yes : 재시작해도 토큰이 남아야 한다. 없으면 배포·재기동 때마다
+    # 전 사용자가 다시 로그인해야 한다.
+    command:
+      - redis-server
+      - --requirepass
+      - "${REDIS_PASSWORD:?REDIS_PASSWORD 가 .env 에 없습니다. 비워 두면 Redis 가 인증 없이 떠서 리프레시 토큰이 무방비가 됩니다. openssl rand -base64 32 로 만들어 넣으세요.}"
+      - --maxmemory
+      - 64mb
+      - --maxmemory-policy
+      - noeviction
+      - --appendonly
+      - "yes"
+
+    volumes:
+      - redis_data:/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    environment:
+      # 헬스체크의 redis-cli -a 가 이 값을 읽는다.
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD 가 .env 에 없습니다. 비워 두면 Redis 가 인증 없이 떠서 리프레시 토큰이 무방비가 됩니다. openssl rand -base64 32 로 만들어 넣으세요.}"
+
+    networks:
+      - polight-network
+
 
   backend:
     image: ${BACKEND_IMAGE:-054422645032.dkr.ecr.ap-northeast-2.amazonaws.com/polight/backend:latest}
@@ -46,12 +93,31 @@ services:
       postgres:
         condition: service_healthy
 
+      # postgres 와 달리 service_started 다. Spring 의 Redis 커넥션은 지연 생성이라
+      # 기동 시점에 Redis 가 필요하지 않고, 무엇보다 Redis 가 죽어도 막히는 것은
+      # 로그인·재발급뿐이다 -- 여행·분석·챗봇은 그대로 동작한다.
+      #
+      # service_healthy 로 두면 헬스체크가 어긋나는 순간 백엔드가 아예 뜨지 않아,
+      # 로그인만 안 되면 될 상황에서 서비스 전체가 내려간다.
+      redis:
+        condition: service_started
+
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
 
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
+
+      # 리프레시 토큰 저장소. 미설정이면 기본값 localhost 를 보고 컨테이너 자기 자신에
+      # 붙으려다 실패해 로그인이 전부 500 이 된다.
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD 가 .env 에 없습니다. 비워 두면 Redis 가 인증 없이 떠서 리프레시 토큰이 무방비가 됩니다. openssl rand -base64 32 로 만들어 넣으세요.}"
+
+      # 리프레시 토큰 수명(초). 기본 14일. 이 값을 줄이면 재로그인 주기가 짧아지고,
+      # 늘리면 유출된 토큰이 살아 있는 최대 기간이 길어진다.
+      SECURITY_REFRESH_TOKEN_EXPIRY_SECONDS: ${SECURITY_REFRESH_TOKEN_EXPIRY_SECONDS:-1209600}
 
       # AI 서버와 공유하는 내부 API 키. 양쪽이 같은 값을 쓴다.
       # 미설정이면 /internal/** 요청을 전부 거부하므로 AI 콜백이 401로 막힌다.
@@ -90,6 +156,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
 
 
 networks:

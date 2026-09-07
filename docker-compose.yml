@@ -19,5 +19,23 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: polight-redis
+    restart: unless-stopped
+    # 리프레시 토큰 저장소. 로컬 개발에서는 비밀번호 없이 띄운다.
+    # appendonly 로 재시작해도 토큰이 살아남게 한다 -- 없으면 컨테이너를 올릴 때마다 로그아웃된다.
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
+  redis_data:

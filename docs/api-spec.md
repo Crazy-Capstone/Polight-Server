@@ -18,7 +18,9 @@
 - 방식: **Bearer JWT** (`Authorization: Bearer {accessToken}`)
 - 토큰 발급: `POST /api/auth/kakao/login`
 - 토큰 만료: 기본 **3600초(1시간)**, 응답의 `expiresInSeconds`로 내려감
-- 리프레시 토큰은 **아직 없습니다.** 만료 시 카카오 로그인을 다시 수행해야 합니다.
+- 리프레시 토큰: 로그인 응답의 `refreshToken`. 만료 기본 **14일**. `POST /api/auth/refresh`로 access token을 재발급합니다.
+  - **재발급 때마다 리프레시 토큰도 새 값으로 바뀝니다(회전).** 응답에 실려 온 `refreshToken`으로 저장해 둔 값을 반드시 덮어쓰세요. 예전 값은 그 즉시 무효입니다.
+  - 같은 리프레시 토큰으로 두 번 재발급하면 두 번째는 401(`INVALID_REFRESH_TOKEN`)입니다. 재발급 요청을 동시에 두 번 보내지 않도록 클라이언트에서 직렬화하세요.
 - 인증 불필요(permitAll) 경로: `/api/auth/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/auth/login/kakao`, `/kakao-login-test.html`, `/error`, `/`, `/favicon.ico`
 - 그 외 **모든 경로는 인증 필수**입니다.
 
@@ -84,17 +86,21 @@
 
 | # | 메서드 | 경로 | 인증 | 설명 |
 | --- | --- | --- | --- | --- |
-| 1 | POST | `/api/auth/kakao/login` | ✕ | 카카오 로그인 → JWT 발급 |
-| 2 | POST | `/api/v1/trips` | ✓ | 여행 세션 생성 + 보험 문서 업로드 (multipart) |
-| 3 | GET | `/api/v1/trips` | ✓ | 내 여행 목록 |
-| 4 | GET | `/api/v1/trips/{tripId}` | ✓ | 여행 단건 조회 |
-| 5 | PATCH | `/api/v1/trips/{tripId}` | ✓ | 여행 정보 수정 |
-| 6 | POST | `/api/v1/trips/{tripId}/documents` | ✓ | 보험 문서 추가 업로드 |
-| 7 | GET | `/api/v1/trips/{tripId}/documents` | ✓ | 보험 문서 목록 |
-| 8 | POST | `/api/v1/trips/{tripId}/documents/{documentId}/analysis` | ✓ | 분석 시작 |
-| 9 | GET | `/api/v1/trips/{tripId}/documents/{documentId}/analysis` | ✓ | 분석 상태/결과 조회 |
-| 10 | POST | `/api/v1/trips/{tripId}/chat/messages` | ✓ | 챗봇에 질문하기 |
-| 11 | GET | `/api/v1/trips/{tripId}/chat/messages` | ✓ | 대화 이력 조회 |
+| 1 | POST | `/api/auth/kakao/login` | ✕ | 카카오 로그인 → access + refresh 토큰 발급 |
+| 2 | POST | `/api/auth/refresh` | ✕ | 리프레시 토큰으로 access token 재발급 (토큰 회전) |
+| 3 | POST | `/api/auth/logout` | ✕ | 리프레시 토큰 무효화 |
+| 4 | POST | `/api/v1/trips` | ✓ | 여행 세션 생성 + 보험 문서 업로드 (multipart) |
+| 5 | GET | `/api/v1/trips` | ✓ | 내 여행 목록 |
+| 6 | GET | `/api/v1/trips/{tripId}` | ✓ | 여행 단건 조회 |
+| 7 | PATCH | `/api/v1/trips/{tripId}` | ✓ | 여행 정보 수정 |
+| 8 | POST | `/api/v1/trips/{tripId}/documents` | ✓ | 보험 문서 추가 업로드 |
+| 9 | GET | `/api/v1/trips/{tripId}/documents` | ✓ | 보험 문서 목록 |
+| 10 | POST | `/api/v1/trips/{tripId}/documents/{documentId}/analysis` | ✓ | 분석 시작 |
+| 11 | GET | `/api/v1/trips/{tripId}/documents/{documentId}/analysis` | ✓ | 분석 상태/결과 조회 |
+| 12 | POST | `/api/v1/trips/{tripId}/chat/messages` | ✓ | 챗봇에 질문하기 |
+| 13 | GET | `/api/v1/trips/{tripId}/chat/messages` | ✓ | 대화 이력 조회 |
+
+> `/api/auth/refresh`와 `/api/auth/logout`이 인증 불필요인 이유: 둘 다 access token이 이미 만료된 상황에서 불리는 API입니다. 신원 확인은 요청 본문의 리프레시 토큰이 대신합니다.
 
 > `/api/users` 컨트롤러는 클래스만 존재하고 **엔드포인트가 아직 없습니다.**
 >
@@ -129,13 +135,15 @@ POST /api/auth/kakao/login
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
 | `accessToken` | string | 이후 모든 요청의 `Authorization: Bearer {값}` |
-| `expiresInSeconds` | number | 만료까지 남은 초 (기본 3600) |
+| `refreshToken` | string | access token 만료 시 3.2에 그대로 실어 보냄. **안전한 곳에 보관** |
+| `expiresInSeconds` | number | access token 만료까지 남은 초 (기본 3600) |
 | `nickname` | string | 사용자 닉네임. 카카오가 닉네임을 주지 않으면 `"카카오사용자"` |
 | `profileImageUrl` | string \| null | 카카오 프로필 이미지 URL. 동의 항목 미동의/미설정이면 `null` |
 
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+  "refreshToken": "9qL3kT7xR2mVb8nZ5wQ1yF6cH0dJ4sA-eG7uP2iO3rE",
   "expiresInSeconds": 3600,
   "nickname": "홍길동",
   "profileImageUrl": "https://k.kakaocdn.net/dn/abc/img_640x640.jpg"
@@ -148,7 +156,75 @@ POST /api/auth/kakao/login
 
 ---
 
-### 3.2 여행 세션 생성 + 보험 문서 업로드
+### 3.2 토큰 재발급
+
+```
+POST /api/auth/refresh
+```
+
+인증 **불필요** (access token이 이미 만료된 상황에서 호출하는 API이므로).
+
+**Request Body**
+
+| 필드 | 타입 | 필수 | 제약 | 설명 |
+| --- | --- | --- | --- | --- |
+| `refreshToken` | string | ✓ | NotBlank | 로그인(3.1) 또는 직전 재발급 응답에서 받은 값 |
+
+```json
+{ "refreshToken": "9qL3kT7xR2mVb8nZ5wQ1yF6cH0dJ4sA-eG7uP2iO3rE" }
+```
+
+**200 OK** — 3.1과 같은 형식입니다.
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `accessToken` | string | 새 access token |
+| `refreshToken` | string | **새 리프레시 토큰.** 저장해 둔 값을 이 값으로 덮어쓰세요 |
+| `expiresInSeconds` | number | 새 access token 만료까지 남은 초 |
+| `nickname` | string | 사용자 닉네임 |
+| `profileImageUrl` | `null` | **항상 null입니다.** 카카오에서만 오는 값이라 서버가 보관하지 않습니다. 로그인 때 받은 값을 클라이언트가 계속 들고 있어야 합니다 |
+
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+  "refreshToken": "aB3xY9zQ1wE5rT7yU2iO4pA-sD6fG8hJ0kL",
+  "expiresInSeconds": 3600,
+  "nickname": "홍길동",
+  "profileImageUrl": null
+}
+```
+
+**에러**: `INVALID_INPUT`(400), `INVALID_REFRESH_TOKEN`(401), `USER_NOT_FOUND`(404)
+
+> ⚠️ **리프레시 토큰은 일회용입니다.** 재발급에 성공하는 순간 보낸 토큰은 무효가 되고 새 토큰이 발급됩니다. 이미 쓴 토큰으로 다시 요청하면 `INVALID_REFRESH_TOKEN`(401)이고, 이때는 로그인 화면으로 보내야 합니다.
+>
+> 401을 받아 재발급하는 인터셉터를 만든다면, **동시에 여러 요청이 401을 받아도 재발급은 한 번만** 나가도록 묶어 주세요. 두 번 나가면 늦은 쪽이 무효 토큰으로 요청해 사용자가 이유 없이 로그아웃됩니다.
+
+---
+
+### 3.3 로그아웃
+
+```
+POST /api/auth/logout
+```
+
+인증 **불필요**.
+
+**Request Body**
+
+| 필드 | 타입 | 필수 | 제약 | 설명 |
+| --- | --- | --- | --- | --- |
+| `refreshToken` | string | ✓ | NotBlank | 무효화할 리프레시 토큰 |
+
+**204 No Content** — 본문 없음. 이미 무효한 토큰을 보내도 204입니다(목적이 이미 달성된 상태이므로).
+
+**에러**: `INVALID_INPUT`(400) — `refreshToken`이 비어 있을 때만.
+
+> ⚠️ **이미 발급된 access token은 만료(기본 1시간) 전까지 계속 유효합니다.** 서버가 access token을 즉시 차단하지는 않으므로, 클라이언트도 저장해 둔 access token을 반드시 함께 지워야 합니다.
+
+---
+
+### 3.4 여행 세션 생성 + 보험 문서 업로드
 
 ```
 POST /api/v1/trips
@@ -234,7 +310,7 @@ Content-Type: multipart/form-data
 
 ---
 
-### 3.3 내 여행 목록
+### 3.5 내 여행 목록
 
 ```
 GET /api/v1/trips
@@ -246,7 +322,7 @@ GET /api/v1/trips
 
 ---
 
-### 3.4 여행 단건 조회
+### 3.6 여행 단건 조회
 
 ```
 GET /api/v1/trips/{tripId}
@@ -262,7 +338,7 @@ GET /api/v1/trips/{tripId}
 
 ---
 
-### 3.5 여행 정보 수정
+### 3.7 여행 정보 수정
 
 ```
 PATCH /api/v1/trips/{tripId}
@@ -271,7 +347,7 @@ PATCH /api/v1/trips/{tripId}
 > ⚠️ 메서드는 PATCH지만 **부분 수정이 아닙니다.** `name`, `startDate`, `endDate`를 **모두 보내야** 합니다(전부 필수). 일부만 보내면 `INVALID_INPUT`이 납니다.
 > `status`는 이 API로 변경할 수 없습니다.
 
-**Request Body** — 3.2 생성과 동일한 필드/제약
+**Request Body** — 3.4 생성과 동일한 필드/제약
 
 **200 OK** — `TripResponse` (`updatedAt` 갱신)
 
@@ -279,7 +355,7 @@ PATCH /api/v1/trips/{tripId}
 
 ---
 
-### 3.6 보험 문서 추가 업로드
+### 3.8 보험 문서 추가 업로드
 
 ```
 POST /api/v1/trips/{tripId}/documents
@@ -330,7 +406,7 @@ Content-Type: multipart/form-data
 
 ---
 
-### 3.7 보험 문서 목록
+### 3.9 보험 문서 목록
 
 ```
 GET /api/v1/trips/{tripId}/documents
@@ -344,7 +420,7 @@ GET /api/v1/trips/{tripId}/documents
 
 ---
 
-### 3.8 보험 문서 분석 시작 (약관용)
+### 3.10 보험 문서 분석 시작 (약관용)
 
 ```
 POST /api/v1/trips/{tripId}/documents/{documentId}/analysis
@@ -395,13 +471,13 @@ POST /api/v1/trips/{tripId}/documents/{documentId}/analysis
 
 ---
 
-### 3.9 분석 상태/결과 조회
+### 3.11 분석 상태/결과 조회
 
 ```
 GET /api/v1/trips/{tripId}/documents/{documentId}/analysis
 ```
 
-**200 OK** — 3.8과 동일한 `AnalysisResponse`
+**200 OK** — 3.10과 동일한 `AnalysisResponse`
 
 **에러**: `AUTHENTICATION_REQUIRED`(401), `TRIP_NOT_FOUND`(404), `POLICY_DOCUMENT_NOT_FOUND`(404), `ANALYSIS_RESULT_NOT_FOUND`(404)
 
@@ -413,11 +489,11 @@ GET /api/v1/trips/{tripId}/documents/{documentId}/analysis
 >
 > 단, 이 보장은 서버의 타임아웃 처리가 켜져 있을 때만 성립합니다(`ANALYSIS_TIMEOUT_ENABLED`, 기본값 `true`). 껐다면 콜백이 오지 않는 분석은 `PROCESSING`에 그대로 남으므로, 그 환경을 대상으로 개발한다면 프론트엔드에도 자체 타임아웃이 필요합니다.
 >
-> `FAILED`를 받으면 사용자에게 재시도 버튼을 노출하고, 누르면 **3.8을 같은 `documentId`로 다시 호출**하세요.
+> `FAILED`를 받으면 사용자에게 재시도 버튼을 노출하고, 누르면 **3.10을 같은 `documentId`로 다시 호출**하세요.
 
 ---
 
-### 3.10 챗봇에 질문하기
+### 3.12 챗봇에 질문하기
 
 ```
 POST /api/v1/trips/{tripId}/chat/messages
@@ -465,7 +541,7 @@ Content-Type: application/json
 #### 프론트가 알아야 할 것
 
 - **세션을 만들거나 고르는 호출이 없습니다.** 대화 세션은 여행당 하나이고, 첫 질문에 서버가 자동으로 만들어 이후 재사용합니다. 응답의 `sessionId`는 참고용이며 다음 요청에 실어 보내지 않아도 됩니다.
-- **대화 이력을 보낼 필요가 없습니다.** 서버가 직전 6개(3턴)를 잘라 AI에 전달합니다. 화면에 이전 대화를 그릴 때는 3.11로 받아 오세요.
+- **대화 이력을 보낼 필요가 없습니다.** 서버가 직전 6개(3턴)를 잘라 AI에 전달합니다. 화면에 이전 대화를 그릴 때는 3.13로 받아 오세요.
 - **검색 범위는 여행 전체**입니다. 그 여행에 올린 약관이 모두 대상이며, 문서를 지정하는 파라미터는 없습니다.
 - `responseType`은 **현재 항상 `TEXT`** 입니다. 병원 카드 같은 카드형 응답은 표시할 데이터 출처가 아직 없어 내려가지 않습니다.
 - `sources`는 답변의 근거가 된 약관 원문입니다. 화면에 쓰지 않아도 되지만, 답변이 이상할 때 어느 조항을 보고 답했는지 확인할 수 있습니다. 빈 배열일 수 있습니다.
@@ -479,7 +555,7 @@ Content-Type: application/json
 
 ---
 
-### 3.11 대화 이력 조회
+### 3.13 대화 이력 조회
 
 ```
 GET /api/v1/trips/{tripId}/chat/messages?limit=50
@@ -539,7 +615,7 @@ GET /api/v1/trips/{tripId}/chat/messages?limit=50
 
 - **대화가 없어도 200입니다.** `sessionId`가 `null`, `messages`가 빈 배열로 옵니다. 여행을 만들고 챗봇을 아직 열지 않은 상태가 정상이라 오류로 두지 않았습니다.
 - `sender`가 `USER`면 사용자 말풍선, `ASSISTANT`면 챗봇 말풍선입니다. `SYSTEM`은 현재 생성되지 않습니다.
-- `messages[]` 항목은 **3.10 응답과 같은 모양**입니다(`messageId`·`content`·`responseType`·`sources`). 질문을 보낸 직후 화면에 붙이는 객체와 이력에서 받은 객체를 다르게 다룰 필요가 없습니다.
+- `messages[]` 항목은 **3.12 응답과 같은 모양**입니다(`messageId`·`content`·`responseType`·`sources`). 질문을 보낸 직후 화면에 붙이는 객체와 이력에서 받은 객체를 다르게 다룰 필요가 없습니다.
 - `createdAt`은 말풍선 시각 표시용입니다. 타임존 없는 로컬 시각(서버 TZ = UTC)으로 내려갑니다.
 - 사용자 메시지의 `sources`는 **항상 빈 배열**입니다.
 
@@ -564,7 +640,7 @@ GET /api/v1/trips/{tripId}/chat/messages?limit=50
 ```
 1) 카카오 인가 코드 획득 (프론트)
    ↓
-2) POST /api/auth/kakao/login          → accessToken 저장
+2) POST /api/auth/kakao/login          → accessToken + refreshToken 저장
    ↓
 3) POST /api/v1/trips  (multipart: trip + 증권 file)
       → tripId, documentId, analysis.status = PROCESSING
@@ -573,6 +649,11 @@ GET /api/v1/trips/{tripId}/chat/messages?limit=50
 4) GET  .../documents/{documentId}/analysis 폴링  → COMPLETED / FAILED
    ↓
 5) GET  .../documents/{documentId}/analysis/coverages  → 담보 목록 + 걱정 매칭
+
+[access token 만료 — 어느 단계에서든 401(AUTHENTICATION_REQUIRED)을 받았을 때]
+   POST /api/auth/refresh  { refreshToken }
+     → 200: accessToken/refreshToken 둘 다 새 값으로 교체하고 원래 요청 재시도
+     → 401(INVALID_REFRESH_TOKEN): 저장된 토큰 모두 폐기하고 로그인 화면으로
 
 [약관이 추가로 필요한 경우 — 증권 분석 결과의 약관을 DB에서 못 찾았을 때]
    a) POST /api/v1/trips/{tripId}/documents  (file + documentKind=TERMS)  → documentId
@@ -588,15 +669,16 @@ GET /api/v1/trips/{tripId}/chat/messages?limit=50
 
 | 항목 | 현황 |
 | --- | --- |
-| 리프레시 토큰 | 없음. 401(`AUTHENTICATION_REQUIRED`) 수신 시 로그인 화면으로 보내야 함 |
-| 로그아웃 API | 없음. 클라이언트에서 토큰 폐기로 처리 |
+| 리프레시 토큰 | **있음**(3.2). 401(`AUTHENTICATION_REQUIRED`) 수신 시 재발급을 먼저 시도하고, 그것도 401이면 로그인 화면으로 |
+| 로그아웃 API | **있음**(3.3). 리프레시 토큰만 무효화하며, 이미 발급된 access token은 만료 전까지 유효하므로 클라이언트도 함께 폐기해야 함 |
+| 다른 기기 로그아웃 | 없음. 기기별 리프레시 토큰이 각각 살아 있으며, 한 기기의 로그아웃이 다른 기기에 영향을 주지 않음 |
 | 내 정보 조회(`/api/users/me`) | 없음. 사용자 정보가 필요하면 JWT payload의 `email`, `name`, `provider` 클레임을 디코딩해 사용 |
 | 여행/문서 삭제 | 없음 |
 | 문서 단건 조회·다운로드 | 없음 |
 | 페이지네이션 | 목록 API 모두 전체 반환 |
 | 분석 상세 결과(보장 항목·면책 조건) | `GET .../analysis/coverages` 로 제공. `GET .../analysis` 응답에는 `summary` 문자열만 들어감 |
 | 실제 분석 파이프라인 | **구현됨.** 증권 업로드 → AI 서버 요청 → 콜백 수신까지 동작하며 `status`가 자동으로 전이함 |
-| 분석 재시도 | `FAILED` 상태에서 3.8을 다시 호출하면 재시도됨. 재업로드 불필요 |
+| 분석 재시도 | `FAILED` 상태에서 3.10을 다시 호출하면 재시도됨. 재업로드 불필요 |
 | 분석 타임아웃 | 제한 시간(기본 10분)을 넘긴 `PROCESSING` 분석은 서버가 `FAILED`로 내림 |
 | 채팅 API | 미구현 |
 | 파일 타입 검증 | 미구현 (서버가 모든 확장자 허용) |
