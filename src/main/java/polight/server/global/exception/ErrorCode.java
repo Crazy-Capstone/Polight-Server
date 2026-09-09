@@ -24,6 +24,7 @@ public enum ErrorCode {
   KAKAO_TOKEN_REQUEST_FAILED(HttpStatus.UNAUTHORIZED, "카카오 토큰 발급에 실패했습니다."),
   KAKAO_USER_INFO_REQUEST_FAILED(HttpStatus.UNAUTHORIZED, "카카오 사용자 정보 조회에 실패했습니다."),
   KAKAO_USER_ID_NOT_FOUND(HttpStatus.UNAUTHORIZED, "카카오 사용자 식별자(providerId)가 없습니다."),
+  INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "리프레시 토큰이 유효하지 않거나 만료되었습니다. 다시 로그인해 주세요."),
 
   // 사용자
   USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
