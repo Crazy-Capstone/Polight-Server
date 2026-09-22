@@ -26,6 +26,7 @@ public record ChatHistoryResponse(
    * 저장된 메시지 1건.
    *
    * @param sender {@code USER}면 사용자 말풍선, {@code ASSISTANT}면 챗봇 말풍선이다
+   * @param suggestedContacts 함께 띄울 현지 연락처 종류. 사용자 메시지에는 항상 비어 있다
    * @param sources 답변의 근거. 사용자 메시지에는 항상 비어 있다
    * @param createdAt 말풍선에 붙일 시각
    */
@@ -34,6 +35,11 @@ public record ChatHistoryResponse(
       ChatSender sender,
       String content,
       ChatResponseType responseType,
+      @Schema(
+              description = "함께 띄울 현지 연락처 종류. 사용자 메시지와 이 필드가 붙기 전 메시지는 빈 배열",
+              example = "[\"POLICE\"]",
+              allowableValues = {"HOSPITAL", "POLICE", "EMBASSY"})
+          List<String> suggestedContacts,
       List<SourceResponse> sources,
       LocalDateTime createdAt) {}
 }

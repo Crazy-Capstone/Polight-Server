@@ -9,6 +9,7 @@ import polight.server.domain.chat.entity.ChatResponseType;
  * 질문 한 번에 대한 응답.
  *
  * @param responseType 지금은 항상 {@code TEXT}다. 카드형 4종은 렌더링에 필요한 데이터 출처가 아직 없다
+ * @param suggestedContacts 이 답변과 함께 띄우면 좋은 현지 연락처 종류. 사고 정황이 아니면 빈 배열이다
  * @param sources 답변의 근거가 된 약관 원문 조각. 화면에 쓰지 않아도 되지만, 답변이 이상할 때 어느 조항을 보고 답했는지 확인하는 데 쓴다
  */
 public record ChatAnswerResponse(
@@ -16,6 +17,11 @@ public record ChatAnswerResponse(
     @Schema(description = "저장된 답변 메시지 id") UUID messageId,
     String answer,
     ChatResponseType responseType,
+    @Schema(
+            description = "함께 띄울 현지 연락처 종류. 사고 정황이 아니면 빈 배열",
+            example = "[\"POLICE\"]",
+            allowableValues = {"HOSPITAL", "POLICE", "EMBASSY"})
+        List<String> suggestedContacts,
     List<SourceResponse> sources) {
 
   /**

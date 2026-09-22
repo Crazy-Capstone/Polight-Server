@@ -47,6 +47,7 @@ class ChatMessageMapperTest {
         new RagQueryResponse(
             "보상됩니다.",
             "TEXT",
+            List.of(),
             List.of(new RagQueryResponse.Source(chunkId, documentId, 12, "항공기 지연으로 인하여…")));
 
     List<SourceResponse> sources = mapper.toSources(response, List.of());
@@ -67,6 +68,7 @@ class ChatMessageMapperTest {
         new RagQueryResponse(
             "보상됩니다.",
             "TEXT",
+            List.of(),
             List.of(new RagQueryResponse.Source(chunkId, documentId, 12, "항공기 지연으로 인하여…")));
 
     List<SourceResponse> sources = mapper.toSources(response, List.of(termsChunk(chunkId)));
@@ -83,8 +85,53 @@ class ChatMessageMapperTest {
   }
 
   @Test
+  void passesSuggestedContactsThrough() {
+    RagQueryResponse response =
+        new RagQueryResponse("경찰에 신고하세요.", "TEXT", List.of("POLICE", "EMBASSY"), List.of());
+
+    assertThat(mapper.toSuggestedContacts(response)).containsExactly("POLICE", "EMBASSY");
+  }
+
+  @Test
+  void passesUnknownContactKindThroughInsteadOfDroppingIt() {
+    RagQueryResponse response =
+        new RagQueryResponse("구급차를 부르세요.", "TEXT", List.of("AMBULANCE"), List.of());
+
+    // 여기서 막으면 AI가 4번째 종류를 배포하는 순간 백엔드도 같이 배포해야 그 값이 화면에 닿는다.
+    // 프론트가 모르는 값은 그리지 않을 뿐이다.
+    assertThat(mapper.toSuggestedContacts(response)).containsExactly("AMBULANCE");
+  }
+
+  @Test
+  void turnsOmittedSuggestedContactsIntoEmptyList() {
+    RagQueryResponse response = new RagQueryResponse("보상됩니다.", "TEXT", null, List.of());
+
+    // 프론트가 null 과 빈 배열을 나눠 다룰 이유가 없다.
+    assertThat(mapper.toSuggestedContacts(response)).isEmpty();
+  }
+
+  @Test
+  void readsStoredSuggestedContactsBackFromMetadata() {
+    String metadata = mapper.toMetadataJson(List.of(), List.of("POLICE"), 900L);
+
+    List<Message> messages = mapper.toMessages(List.of(assistantWithMetadata(metadata)));
+
+    // 저장하지 않으면 앱을 껐다 켠 뒤 그 대화만 연락처가 사라진다.
+    assertThat(messages.get(0).suggestedContacts()).containsExactly("POLICE");
+  }
+
+  @Test
+  void returnsEmptyContactsForMessagesStoredBeforeTheFieldExisted() {
+    // 필드가 생기기 전에 저장된 metadata_json 에는 이 키가 없다.
+    List<Message> messages =
+        mapper.toMessages(List.of(assistantWithMetadata("{\"sources\":[],\"latencyMs\":12}")));
+
+    assertThat(messages.get(0).suggestedContacts()).isEmpty();
+  }
+
+  @Test
   void returnsEmptySourcesWhenAiOmitsThem() {
-    assertThat(mapper.toSources(new RagQueryResponse("모르겠습니다.", "TEXT", null), List.of()))
+    assertThat(mapper.toSources(new RagQueryResponse("모르겠습니다.", "TEXT", null, null), List.of()))
         .isEmpty();
   }
 
@@ -92,7 +139,9 @@ class ChatMessageMapperTest {
   void serializesMetadataWithLatency() {
     String json =
         mapper.toMetadataJson(
-            List.of(new SourceResponse(null, null, "제3관", "제3관 > 제12조", 12, 12, "인용")), 1234L);
+            List.of(new SourceResponse(null, null, "제3관", "제3관 > 제12조", 12, 12, "인용")),
+            List.of("POLICE"),
+            1234L);
 
     assertThat(json).contains("\"latencyMs\":1234").contains("제3관 > 제12조");
   }
@@ -110,7 +159,7 @@ class ChatMessageMapperTest {
             });
 
     // 근거는 부가 정보다. 직렬화가 실패해도 사용자가 받은 답을 잃을 이유가 없다.
-    assertThat(failing.toMetadataJson(List.of(), 1L)).isNull();
+    assertThat(failing.toMetadataJson(List.of(), List.of(), 1L)).isNull();
   }
 
   @Test
@@ -134,7 +183,9 @@ class ChatMessageMapperTest {
   void readsStoredSourcesBackFromMetadata() {
     String metadata =
         mapper.toMetadataJson(
-            List.of(new SourceResponse(null, null, "제3관", "제3관 > 제12조", 12, 12, "인용")), 900L);
+            List.of(new SourceResponse(null, null, "제3관", "제3관 > 제12조", 12, 12, "인용")),
+            List.of("POLICE"),
+            900L);
 
     List<Message> messages = mapper.toMessages(List.of(assistantWithMetadata(metadata)));
 
