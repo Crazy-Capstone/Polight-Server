@@ -32,7 +32,7 @@ import polight.server.domain.chat.entity.ChatSender;
 import polight.server.domain.chat.entity.ChatSession;
 import polight.server.domain.chat.mapper.ChatMessageMapper;
 import polight.server.domain.chat.service.CertificateContextProvider.CertificateContext;
-import polight.server.domain.rag.service.RagSearchScopeService;
+import polight.server.domain.terms.service.TermsChunkQueryService;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -41,7 +41,7 @@ class ChatQueryServiceTest {
   @Mock private ChatSessionService chatSessionService;
   @Mock private ChatMessageService chatMessageService;
   @Mock private CertificateContextProvider certificateContextProvider;
-  @Mock private RagSearchScopeService ragSearchScopeService;
+  @Mock private TermsChunkQueryService termsChunkQueryService;
   @Mock private RagQueryClient ragQueryClient;
   @Mock private ChatMessageMapper chatMessageMapper;
 
@@ -61,7 +61,7 @@ class ChatQueryServiceTest {
             chatSessionService,
             chatMessageService,
             certificateContextProvider,
-            ragSearchScopeService,
+            termsChunkQueryService,
             ragQueryClient,
             chatMessageMapper);
 
@@ -191,12 +191,12 @@ class ChatQueryServiceTest {
 
     service.ask(userId, tripId, new ChatQuestionRequest("이건 뭐죠?"));
 
-    verify(ragSearchScopeService, org.mockito.Mockito.never()).findOwnedChunks(any(), anyList());
+    verify(termsChunkQueryService, org.mockito.Mockito.never()).findChunksIn(any(), anyList());
     verify(chatMessageService).appendAssistantMessage(eq(sessionId), eq("모르겠습니다."), any());
   }
 
   @Test
-  void filtersSourceChunksByOwner() {
+  void looksUpSourceChunksInTheTermsItSearched() {
     UUID chunkId = UUID.randomUUID();
     given(ragQueryClient.query(any()))
         .willReturn(
@@ -204,12 +204,30 @@ class ChatQueryServiceTest {
                 "보상됩니다.",
                 "TEXT",
                 List.of(new RagQueryResponse.Source(chunkId, UUID.randomUUID(), 12, "인용"))));
-    given(ragSearchScopeService.findOwnedChunks(eq(userId), anyList())).willReturn(List.of());
+    given(termsChunkQueryService.findChunksIn(eq(termsId), anyList())).willReturn(List.of());
 
     service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
 
-    // AI가 돌려준 chunkId를 그대로 믿지 않고 소유자로 한 번 더 거른다.
-    verify(ragSearchScopeService).findOwnedChunks(userId, List.of(chunkId));
+    // 검색 범위로 이 약관 하나를 지목했으므로 돌아온 청크도 그 약관의 것이어야 한다.
+    // 범위 없이 조회하면 다른 약관의 조항 제목이 이 답변의 근거로 실린다.
+    verify(termsChunkQueryService).findChunksIn(termsId, List.of(chunkId));
+  }
+
+  @Test
+  void stillAnswersWhenNoSourceChunkIsFound() {
+    given(ragQueryClient.query(any()))
+        .willReturn(
+            new RagQueryResponse(
+                "보상됩니다.",
+                "TEXT",
+                List.of(new RagQueryResponse.Source(UUID.randomUUID(), null, 12, "인용"))));
+    given(termsChunkQueryService.findChunksIn(any(), anyList())).willReturn(List.of());
+
+    ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
+
+    // 비는 것은 조항 위치뿐이고 인용문은 AI 응답에 이미 들어 있다. 답을 막을 이유가 없다.
+    assertThat(response.answer()).isEqualTo("보상됩니다.");
+    verify(chatMessageService).appendAssistantMessage(eq(sessionId), eq("보상됩니다."), any());
   }
 
   @Test

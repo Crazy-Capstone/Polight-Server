@@ -6,12 +6,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import polight.server.domain.chat.dto.ChatAnswerResponse.SourceResponse;
 import polight.server.domain.chat.dto.ChatHistoryResponse.Message;
 import polight.server.domain.chat.dto.RagQueryRequest.HistoryTurn;
 import polight.server.domain.chat.dto.RagQueryResponse;
 import polight.server.domain.chat.entity.ChatMessage;
 import polight.server.domain.chat.entity.ChatSender;
+import polight.server.domain.terms.entity.PolicyTerms;
+import polight.server.domain.terms.entity.PolicyTermsChunk;
+import polight.server.domain.terms.entity.TermsSource;
+import polight.server.domain.terms.entity.TermsVerificationStatus;
 
 class ChatMessageMapperTest {
 
@@ -35,7 +40,7 @@ class ChatMessageMapperTest {
   }
 
   @Test
-  void keepsQuoteWhenChunkIsNotOwned() {
+  void keepsQuoteWhenChunkIsOutOfScope() {
     UUID chunkId = UUID.randomUUID();
     UUID documentId = UUID.randomUUID();
     RagQueryResponse response =
@@ -46,12 +51,35 @@ class ChatMessageMapperTest {
 
     List<SourceResponse> sources = mapper.toSources(response, List.of());
 
-    // 청크를 못 찾았거나 남의 것이면 위치만 비운다. 인용문은 AI 응답에 이미 있으므로 버리지 않는다.
+    // 청크를 못 찾았거나 질의에 지목한 약관 밖의 것이면 위치만 비운다. 인용문은 AI 응답에 이미 있으므로 버리지 않는다.
     assertThat(sources).hasSize(1);
     assertThat(sources.get(0).quote()).isEqualTo("항공기 지연으로 인하여…");
     assertThat(sources.get(0).sectionTitle()).isNull();
     assertThat(sources.get(0).clausePath()).isNull();
     assertThat(sources.get(0).pageStart()).isEqualTo(12);
+  }
+
+  @Test
+  void fillsClauseLocationFromTermsChunk() {
+    UUID chunkId = UUID.randomUUID();
+    UUID documentId = UUID.randomUUID();
+    RagQueryResponse response =
+        new RagQueryResponse(
+            "보상됩니다.",
+            "TEXT",
+            List.of(new RagQueryResponse.Source(chunkId, documentId, 12, "항공기 지연으로 인하여…")));
+
+    List<SourceResponse> sources = mapper.toSources(response, List.of(termsChunk(chunkId)));
+
+    // AI는 chunkId 와 인용문만 보낸다. 조항 제목·경로·페이지는 policy_terms_chunks 에 있다.
+    assertThat(sources).hasSize(1);
+    assertThat(sources.get(0).chunkId()).isEqualTo(chunkId);
+    assertThat(sources.get(0).sectionTitle()).isEqualTo("제3관 배상책임 특별약관");
+    assertThat(sources.get(0).clausePath()).isEqualTo("제3관 > 제12조");
+    assertThat(sources.get(0).pageStart()).isEqualTo(11);
+    assertThat(sources.get(0).pageEnd()).isEqualTo(13);
+    // 약관 청크에는 문서가 없다. AI가 보낸 값을 그대로 흘린다.
+    assertThat(sources.get(0).documentId()).isEqualTo(documentId);
   }
 
   @Test
@@ -135,6 +163,31 @@ class ChatMessageMapperTest {
         .content("보상됩니다.")
         .metadataJson(metadataJson)
         .build();
+  }
+
+  private PolicyTermsChunk termsChunk(UUID chunkId) {
+    PolicyTerms terms =
+        PolicyTerms.builder()
+            .insurerName("삼성화재해상보험")
+            .productName("해외여행보험")
+            .verificationStatus(TermsVerificationStatus.VERIFIED)
+            .source(TermsSource.OFFICIAL)
+            .build();
+
+    PolicyTermsChunk chunk =
+        PolicyTermsChunk.builder()
+            .terms(terms)
+            .chunkIndex(0)
+            .pageStart(11)
+            .pageEnd(13)
+            .sectionTitle("제3관 배상책임 특별약관")
+            .clausePath("제3관 > 제12조")
+            .content("항공기 지연으로 인하여 발생한 비용을 보상합니다.")
+            .build();
+    // id 는 DB가 채운다. 매퍼가 id 로 짝을 맞추므로 테스트에서는 직접 넣는다.
+    ReflectionTestUtils.setField(chunk, "id", chunkId);
+
+    return chunk;
   }
 
   private ChatMessage message(ChatSender sender, String content) {

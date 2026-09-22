@@ -18,7 +18,7 @@ import polight.server.domain.chat.dto.ChatMessageMetadata;
 import polight.server.domain.chat.dto.RagQueryRequest.HistoryTurn;
 import polight.server.domain.chat.dto.RagQueryResponse;
 import polight.server.domain.chat.entity.ChatMessage;
-import polight.server.domain.rag.entity.PolicyChunk;
+import polight.server.domain.terms.entity.PolicyTermsChunk;
 
 /** 대화 메시지와 AI 응답 사이의 변환을 담당한다. */
 @Slf4j
@@ -46,27 +46,29 @@ public class ChatMessageMapper {
    * AI가 돌려준 근거에 조항 위치를 채운다.
    *
    * <p>AI는 {@code chunkId}·{@code documentId}·{@code page}·{@code quote}만 보낸다. 조항 제목과 경로는 {@code
-   * policy_chunks}에 있으므로 서버가 붙인다.
+   * policy_terms_chunks}에 있으므로 서버가 붙인다.
    *
-   * @param ownedChunks 사용자 소유로 확인된 청크. 여기 없는 {@code chunkId}는 위치 없이 인용문만 남긴다
+   * @param scopedChunks 질의에 지목한 약관에 속한 것으로 확인된 청크. 여기 없는 {@code chunkId}는 위치 없이 인용문만 남긴다
    */
-  public List<SourceResponse> toSources(RagQueryResponse response, List<PolicyChunk> ownedChunks) {
+  public List<SourceResponse> toSources(
+      RagQueryResponse response, List<PolicyTermsChunk> scopedChunks) {
     if (response.sources() == null || response.sources().isEmpty()) {
       return List.of();
     }
 
-    Map<UUID, PolicyChunk> byId =
-        ownedChunks.stream().collect(Collectors.toMap(PolicyChunk::getId, Function.identity()));
+    Map<UUID, PolicyTermsChunk> byId =
+        scopedChunks.stream()
+            .collect(Collectors.toMap(PolicyTermsChunk::getId, Function.identity()));
 
     return response.sources().stream()
         .map(source -> toSource(source, byId.get(source.chunkId())))
         .toList();
   }
 
-  private SourceResponse toSource(RagQueryResponse.Source source, PolicyChunk chunk) {
+  private SourceResponse toSource(RagQueryResponse.Source source, PolicyTermsChunk chunk) {
     if (chunk == null) {
-      // AI가 보낸 chunkId를 DB에서 찾지 못했거나 남의 청크였다. 인용문은 AI 응답에 이미 들어
-      // 있으므로 버리지 않고, 위치만 비운다.
+      // AI가 보낸 chunkId를 DB에서 찾지 못했거나 질의에 지목한 약관 밖의 청크였다. 인용문은
+      // AI 응답에 이미 들어 있으므로 버리지 않고, 위치만 비운다.
       return new SourceResponse(
           source.chunkId(), source.documentId(), null, null, source.page(), source.page(),
           source.quote());
@@ -74,7 +76,10 @@ public class ChatMessageMapper {
 
     return new SourceResponse(
         chunk.getId(),
-        chunk.getDocument().getId(),
+        // 약관 청크에는 문서가 없다. 공용 약관은 원본 문서(source_document_id)가 비어 있을 수
+        // 있고, 있더라도 그것은 "누가 올린 파일인가"라서 근거의 위치가 아니다. AI가 보낸 값을
+        // 그대로 흘린다 -- 없으면 null 이고, 응답 스키마는 그대로다.
+        source.documentId(),
         chunk.getSectionTitle(),
         chunk.getClausePath(),
         chunk.getPageStart(),

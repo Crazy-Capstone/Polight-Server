@@ -17,8 +17,8 @@ import polight.server.domain.chat.entity.ChatResponseType;
 import polight.server.domain.chat.entity.ChatSession;
 import polight.server.domain.chat.mapper.ChatMessageMapper;
 import polight.server.domain.chat.service.CertificateContextProvider.CertificateContext;
-import polight.server.domain.rag.entity.PolicyChunk;
-import polight.server.domain.rag.service.RagSearchScopeService;
+import polight.server.domain.terms.entity.PolicyTermsChunk;
+import polight.server.domain.terms.service.TermsChunkQueryService;
 
 /**
  * 질문 하나를 답변까지 끌고 간다.
@@ -52,7 +52,7 @@ public class ChatQueryService {
   private final ChatSessionService chatSessionService;
   private final ChatMessageService chatMessageService;
   private final CertificateContextProvider certificateContextProvider;
-  private final RagSearchScopeService ragSearchScopeService;
+  private final TermsChunkQueryService termsChunkQueryService;
   private final RagQueryClient ragQueryClient;
   private final ChatMessageMapper chatMessageMapper;
 
@@ -96,7 +96,7 @@ public class ChatQueryService {
 
     warnIfUnsupportedResponseType(answer, sessionId);
 
-    List<SourceResponse> sources = enrichSources(userId, answer);
+    List<SourceResponse> sources = enrichSources(certificate.termsId(), answer);
     ChatMessage saved =
         chatMessageService.appendAssistantMessage(
             sessionId, answer.answer(), chatMessageMapper.toMetadataJson(sources, latencyMs));
@@ -136,8 +136,16 @@ public class ChatQueryService {
     }
   }
 
-  /** AI가 돌려준 근거에 조항 위치를 채운다. 청크는 사용자 소유인 것만 쓴다. */
-  private List<SourceResponse> enrichSources(UUID userId, RagQueryResponse answer) {
+  /**
+   * AI가 돌려준 근거에 조항 위치를 채운다.
+   *
+   * <p>조회 범위는 질의에 실어 보낸 약관({@code termsId})이다. 검색 범위로 그 약관 하나를 지목했으므로 돌아온 청크도 그 약관의 것이어야 한다.
+   * AI 응답을 그대로 믿고 조회하면 다른 약관의 조항 제목이 이 답변의 근거로 실린다.
+   *
+   * <p>사용자 소유로 거르지 않는 이유: 약관은 상품 공용 문서라 청크에 주인이 없다. "이 사용자가 이 약관을 볼 수 있는가"는 증권-약관 매칭이
+   * 이미 판정했고, 그 결과가 여기 들어온 {@code termsId}다.
+   */
+  private List<SourceResponse> enrichSources(UUID termsId, RagQueryResponse answer) {
     if (answer.sources() == null || answer.sources().isEmpty()) {
       return List.of();
     }
@@ -149,9 +157,34 @@ public class ChatQueryService {
             .distinct()
             .toList();
 
-    List<PolicyChunk> ownedChunks = ragSearchScopeService.findOwnedChunks(userId, chunkIds);
+    List<PolicyTermsChunk> scopedChunks = termsChunkQueryService.findChunksIn(termsId, chunkIds);
+    warnIfNoChunkResolved(termsId, chunkIds, scopedChunks);
 
-    return chatMessageMapper.toSources(answer, ownedChunks);
+    return chatMessageMapper.toSources(answer, scopedChunks);
+  }
+
+  /**
+   * AI가 근거를 보냈는데 한 건도 찾지 못하면 남긴다.
+   *
+   * <p>이건 계약이 어긋났다는 신호다. 질의에 {@code termsId}를 실어 보냈으니 AI가 그 약관의 {@code policy_terms_chunks}에서
+   * 검색했다면 id가 전부 여기서 찾아진다. 하나도 못 찾는 것은 AI가 다른 테이블({@code policy_chunks})의 id를 돌려주고 있거나, 우리가
+   * 지목한 약관이 아닌 곳에서 검색했다는 뜻이다.
+   *
+   * <p>화면에서는 "인용문은 있는데 조항이 안 보인다"로만 드러나 원인을 짚기 어렵다. 그래서 서버 쪽에 흔적을 남긴다.
+   *
+   * <p>답변은 그대로 내려간다. 비는 것은 조항 위치뿐이고 인용문은 AI 응답에 이미 들어 있어, 이것 때문에 답을 막을 이유가 없다.
+   */
+  private void warnIfNoChunkResolved(
+      UUID termsId, List<UUID> chunkIds, List<PolicyTermsChunk> scopedChunks) {
+    if (chunkIds.isEmpty() || !scopedChunks.isEmpty()) {
+      return;
+    }
+
+    log.warn(
+        "AI가 돌려준 근거 청크를 약관에서 하나도 찾지 못했습니다(조항 위치 없이 인용문만 내려갑니다): "
+            + "termsId={}, chunkIds={}건",
+        termsId,
+        chunkIds.size());
   }
 
   /**

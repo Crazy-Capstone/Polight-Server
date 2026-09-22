@@ -22,8 +22,11 @@ public record ChatAnswerResponse(
    * 답변 근거 1건.
    *
    * <p>AI 서버는 {@code chunkId}·{@code documentId}·{@code page}·{@code quote}만 돌려준다. 조항 위치({@code
-   * sectionTitle}·{@code clausePath})와 페이지 범위는 서버가 {@code policy_chunks}에서 채운다. 청크를 찾지 못하면 그 필드만
-   * 비고 인용문은 그대로 남는다.
+   * sectionTitle}·{@code clausePath})와 페이지 범위는 서버가 {@code policy_terms_chunks}에서, 그것도 질의에 지목한
+   * 약관에 속한 청크에서만 채운다. 청크를 찾지 못하면 그 필드만 비고 인용문은 그대로 남는다.
+   *
+   * <p>{@code documentId}는 AI가 보낸 값을 그대로 흘린다. 약관 청크는 문서가 아니라 약관에 매달려 있어 서버가 채울 값이 없다 --
+   * 비어 있을 수 있다.
    */
   public record SourceResponse(
       UUID chunkId,
