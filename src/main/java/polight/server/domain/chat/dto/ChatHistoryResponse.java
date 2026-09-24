@@ -36,9 +36,11 @@ public record ChatHistoryResponse(
       String content,
       ChatResponseType responseType,
       @Schema(
-              description = "함께 띄울 현지 연락처 종류. 사용자 메시지와 이 필드가 붙기 전 메시지는 빈 배열",
-              example = "[\"POLICE\"]",
-              allowableValues = {"HOSPITAL", "POLICE", "EMBASSY"})
+              description =
+                  "함께 띄울 현지 연락처 종류. 사용자 메시지와 이 필드가 붙기 전 메시지는 빈 배열. "
+                      + "현재 알려진 값은 HOSPITAL, POLICE, EMBASSY 이며 늘어날 수 있다 "
+                      + "-- 모르는 값은 그리지 않고 넘기면 된다",
+              example = "[\"POLICE\"]")
           List<String> suggestedContacts,
       List<SourceResponse> sources,
       LocalDateTime createdAt) {}

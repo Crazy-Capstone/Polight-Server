@@ -18,9 +18,11 @@ public record ChatAnswerResponse(
     String answer,
     ChatResponseType responseType,
     @Schema(
-            description = "함께 띄울 현지 연락처 종류. 사고 정황이 아니면 빈 배열",
-            example = "[\"POLICE\"]",
-            allowableValues = {"HOSPITAL", "POLICE", "EMBASSY"})
+            description =
+                "함께 띄울 현지 연락처 종류. 사고 정황이 아니면 빈 배열. "
+                    + "현재 알려진 값은 HOSPITAL, POLICE, EMBASSY 이며 늘어날 수 있다 "
+                    + "-- 모르는 값은 그리지 않고 넘기면 된다",
+            example = "[\"POLICE\"]")
         List<String> suggestedContacts,
     List<SourceResponse> sources) {
 
