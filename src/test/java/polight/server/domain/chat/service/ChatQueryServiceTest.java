@@ -73,6 +73,7 @@ class ChatQueryServiceTest {
         .willReturn(new CertificateContext(termsId, List.of(), false));
     given(ragQueryClient.query(any())).willReturn(answer("보상됩니다."));
     given(chatMessageMapper.toSources(any(), anyList())).willReturn(List.of());
+    given(chatMessageMapper.toSuggestedContacts(any())).willReturn(List.of());
     given(chatMessageService.appendAssistantMessage(eq(sessionId), any(), any()))
         .willReturn(assistantMessage("보상됩니다."));
   }
@@ -164,7 +165,7 @@ class ChatQueryServiceTest {
   @Test
   void storesAnswerAsTextEvenWhenAiSendsCardType() {
     given(ragQueryClient.query(any()))
-        .willReturn(new RagQueryResponse("병원 목록입니다.", "HOSPITAL_CARDS", List.of()));
+        .willReturn(new RagQueryResponse("병원 목록입니다.", "HOSPITAL_CARDS", List.of(), List.of()));
 
     ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("병원 알려줘"));
 
@@ -187,7 +188,7 @@ class ChatQueryServiceTest {
 
   @Test
   void doesNotLookUpChunksWhenAiReturnsNoSources() {
-    given(ragQueryClient.query(any())).willReturn(new RagQueryResponse("모르겠습니다.", "TEXT", null));
+    given(ragQueryClient.query(any())).willReturn(new RagQueryResponse("모르겠습니다.", "TEXT", null, null));
 
     service.ask(userId, tripId, new ChatQuestionRequest("이건 뭐죠?"));
 
@@ -203,6 +204,7 @@ class ChatQueryServiceTest {
             new RagQueryResponse(
                 "보상됩니다.",
                 "TEXT",
+                List.of(),
                 List.of(new RagQueryResponse.Source(chunkId, UUID.randomUUID(), 12, "인용"))));
     given(termsChunkQueryService.findChunksIn(eq(termsId), anyList())).willReturn(List.of());
 
@@ -220,6 +222,7 @@ class ChatQueryServiceTest {
             new RagQueryResponse(
                 "보상됩니다.",
                 "TEXT",
+                List.of(),
                 List.of(new RagQueryResponse.Source(UUID.randomUUID(), null, 12, "인용"))));
     given(termsChunkQueryService.findChunksIn(any(), anyList())).willReturn(List.of());
 
@@ -231,15 +234,43 @@ class ChatQueryServiceTest {
   }
 
   @Test
+  void passesSuggestedContactsFromAiToTheResponse() {
+    given(ragQueryClient.query(any()))
+        .willReturn(new RagQueryResponse("경찰에 신고하세요.", "TEXT", List.of("POLICE"), List.of()));
+    given(chatMessageMapper.toSuggestedContacts(any())).willReturn(List.of("POLICE"));
+    given(chatMessageService.appendAssistantMessage(eq(sessionId), any(), any()))
+        .willReturn(assistantMessage("경찰에 신고하세요."));
+
+    ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("도난당했어요"));
+
+    assertThat(response.suggestedContacts()).containsExactly("POLICE");
+    // 이력 조회도 같은 모양이어야 하므로 metadata_json 에 함께 저장한다.
+    verify(chatMessageMapper).toMetadataJson(anyList(), eq(List.of("POLICE")), anyLong());
+  }
+
+  @Test
+  void sendsNoContactsWhenAiCallIsSkipped() {
+    given(certificateContextProvider.load(userId, tripId))
+        .willReturn(new CertificateContext(null, List.of(), false));
+    given(chatMessageService.appendAssistantMessage(sessionId, ChatQueryService.NO_TERMS_ANSWER, null))
+        .willReturn(assistantMessage(ChatQueryService.NO_TERMS_ANSWER));
+
+    ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("도난당했어요"));
+
+    // 사고 정황인지 판단하는 주체는 답변 LLM인데 그 호출을 건너뛰었다.
+    assertThat(response.suggestedContacts()).isEmpty();
+  }
+
+  @Test
   void measuresAiLatencyForMetadata() {
     service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
 
     // 답변이 느릴 때 검색·생성 어느 쪽 문제인지 나누려면 저장해 둔 값이 있어야 한다.
-    verify(chatMessageMapper).toMetadataJson(anyList(), anyLong());
+    verify(chatMessageMapper).toMetadataJson(anyList(), anyList(), anyLong());
   }
 
   private RagQueryResponse answer(String text) {
-    return new RagQueryResponse(text, "TEXT", List.of());
+    return new RagQueryResponse(text, "TEXT", List.of(), List.of());
   }
 
   private ChatMessage assistantMessage(String content) {

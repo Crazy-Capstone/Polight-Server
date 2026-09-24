@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -25,6 +26,13 @@ import polight.server.domain.terms.entity.PolicyTermsChunk;
 @Component
 @RequiredArgsConstructor
 public class ChatMessageMapper {
+
+  /**
+   * AI와 합의한 연락처 종류.
+   *
+   * <p>검증이 아니라 <b>관측</b>용이다. 여기 없는 값도 그대로 흘리고 로그만 남긴다({@link #toSuggestedContacts}).
+   */
+  private static final Set<String> KNOWN_CONTACT_KINDS = Set.of("HOSPITAL", "POLICE", "EMBASSY");
 
   private final ObjectMapper objectMapper;
 
@@ -100,32 +108,61 @@ public class ChatMessageMapper {
   }
 
   private Message toMessage(ChatMessage message) {
+    ChatMessageMetadata metadata = readMetadata(message.getMetadataJson());
+
     return new Message(
         message.getId(),
         message.getSender(),
         message.getContent(),
         message.getResponseType(),
-        readSources(message.getMetadataJson()),
+        metadata == null || metadata.suggestedContacts() == null
+            ? List.of()
+            : metadata.suggestedContacts(),
+        metadata == null || metadata.sources() == null ? List.of() : metadata.sources(),
         message.getCreatedAt());
   }
 
   /**
-   * 저장해 둔 근거를 되읽는다.
+   * AI가 보낸 연락처 종류를 응답에 실을 형태로 고른다.
    *
-   * <p>읽지 못해도 빈 목록으로 넘긴다. 근거는 부가 정보인데, 이것 때문에 대화 이력 전체가 열리지 않으면 사용자는 자기 대화를 볼 수 없게 된다.
+   * <p>합의한 3종({@code HOSPITAL} {@code POLICE} {@code EMBASSY}) 밖의 값이 와도 <b>버리지 않고 그대로
+   * 흘린다.</b> 프론트가 모르는 값은 그리지 않을 뿐이고, 여기서 막으면 AI가 4번째 종류를 배포하는 순간 백엔드도
+   * 같이 배포해야 그 값이 화면에 닿는다. 대신 {@code WARN}으로 드러낸다 -- 어휘가 늘어난 사실을 아무도 모르는
+   * 것이 문제지, 값이 지나가는 것이 문제가 아니다.
+   *
+   * <p>{@code null}은 빈 목록으로 바꾼다. AI가 생략할 수 있고, 프론트가 {@code null}과 빈 배열을 나눠 다룰
+   * 이유가 없다.
    */
-  private List<SourceResponse> readSources(String metadataJson) {
-    if (metadataJson == null || metadataJson.isBlank()) {
+  public List<String> toSuggestedContacts(RagQueryResponse response) {
+    List<String> contacts = response.suggestedContacts();
+    if (contacts == null || contacts.isEmpty()) {
       return List.of();
     }
 
+    List<String> unknown = contacts.stream().filter(kind -> !KNOWN_CONTACT_KINDS.contains(kind)).toList();
+    if (!unknown.isEmpty()) {
+      log.warn("합의한 어휘 밖의 연락처 종류입니다(그대로 전달합니다): {}", unknown);
+    }
+
+    return contacts;
+  }
+
+  /**
+   * 저장해 둔 메타데이터를 되읽는다.
+   *
+   * <p>읽지 못하면 {@code null}이다. 호출한 쪽이 빈 값으로 채운다 -- 근거와 연락처는 부가 정보인데, 이것 때문에
+   * 대화 이력 전체가 열리지 않으면 사용자는 자기 대화를 볼 수 없게 된다.
+   */
+  private ChatMessageMetadata readMetadata(String metadataJson) {
+    if (metadataJson == null || metadataJson.isBlank()) {
+      return null;
+    }
+
     try {
-      ChatMessageMetadata metadata =
-          objectMapper.readValue(metadataJson, ChatMessageMetadata.class);
-      return metadata.sources() == null ? List.of() : metadata.sources();
+      return objectMapper.readValue(metadataJson, ChatMessageMetadata.class);
     } catch (JsonProcessingException exception) {
       log.warn("대화 메타데이터를 읽지 못해 근거 없이 내려줍니다.", exception);
-      return List.of();
+      return null;
     }
   }
 
@@ -134,9 +171,11 @@ public class ChatMessageMapper {
    *
    * <p>직렬화가 실패해도 답변은 살린다. 근거는 부가 정보이고, 이것 때문에 사용자가 받은 답을 잃을 이유가 없다.
    */
-  public String toMetadataJson(List<SourceResponse> sources, long latencyMs) {
+  public String toMetadataJson(
+      List<SourceResponse> sources, List<String> suggestedContacts, long latencyMs) {
     try {
-      return objectMapper.writeValueAsString(new ChatMessageMetadata(sources, latencyMs));
+      return objectMapper.writeValueAsString(
+          new ChatMessageMetadata(sources, suggestedContacts, latencyMs));
     } catch (JsonProcessingException exception) {
       log.warn("대화 메타데이터를 직렬화하지 못해 비워 둡니다.", exception);
       return null;

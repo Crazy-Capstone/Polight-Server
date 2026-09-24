@@ -63,6 +63,7 @@ class ChatHistoryServiceTest {
                     "보상돼요?",
                     ChatResponseType.TEXT,
                     List.of(),
+                    List.of(),
                     LocalDateTime.now())));
 
     ChatHistoryResponse response = service.getMessages(userId, tripId, null);

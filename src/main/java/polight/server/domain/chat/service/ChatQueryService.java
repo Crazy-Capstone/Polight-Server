@@ -97,12 +97,20 @@ public class ChatQueryService {
     warnIfUnsupportedResponseType(answer, sessionId);
 
     List<SourceResponse> sources = enrichSources(certificate.termsId(), answer);
+    List<String> suggestedContacts = chatMessageMapper.toSuggestedContacts(answer);
     ChatMessage saved =
         chatMessageService.appendAssistantMessage(
-            sessionId, answer.answer(), chatMessageMapper.toMetadataJson(sources, latencyMs));
+            sessionId,
+            answer.answer(),
+            chatMessageMapper.toMetadataJson(sources, suggestedContacts, latencyMs));
 
     return new ChatAnswerResponse(
-        sessionId, saved.getId(), saved.getContent(), saved.getResponseType(), sources);
+        sessionId,
+        saved.getId(),
+        saved.getContent(),
+        saved.getResponseType(),
+        suggestedContacts,
+        sources);
   }
 
   /**
@@ -118,8 +126,14 @@ public class ChatQueryService {
 
     ChatMessage saved = chatMessageService.appendAssistantMessage(sessionId, NO_TERMS_ANSWER, null);
 
+    // 연락처도 비운다. 사고 정황인지 판단하는 주체는 답변 LLM인데 그 호출을 건너뛰었다.
     return new ChatAnswerResponse(
-        sessionId, saved.getId(), saved.getContent(), saved.getResponseType(), List.of());
+        sessionId,
+        saved.getId(),
+        saved.getContent(),
+        saved.getResponseType(),
+        List.of(),
+        List.of());
   }
 
   /**
