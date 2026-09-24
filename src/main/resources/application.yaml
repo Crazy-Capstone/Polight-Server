@@ -136,7 +136,7 @@ ai:
     #
     # 올릴수록 프롬프트가 길어져 비용과 지연이 함께 오른다. 배포 후 응답 시간을 보고
     # 조정한다 -- 재배포 없이 AI_SERVER_CHAT_HISTORY_SIZE 로 바꿀 수 있다.
-    chat-history-size: ${AI_SERVER_CHAT_HISTORY_SIZE:20}
+    chat-history-size: ${AI_SERVER_CHAT_HISTORY_SIZE:10}
     max-attempts: ${AI_SERVER_MAX_ATTEMPTS:3}
     retry-delay: ${AI_SERVER_RETRY_DELAY:500ms}
 
