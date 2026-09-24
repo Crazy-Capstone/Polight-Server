@@ -205,7 +205,7 @@ class ChatQueryServiceTest {
                 "보상됩니다.",
                 "TEXT",
                 List.of(),
-                List.of(new RagQueryResponse.Source(chunkId, UUID.randomUUID(), 12, "인용"))));
+                List.of(source(chunkId, UUID.randomUUID()))));
     given(termsChunkQueryService.findChunksIn(eq(termsId), anyList())).willReturn(List.of());
 
     service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
@@ -223,7 +223,7 @@ class ChatQueryServiceTest {
                 "보상됩니다.",
                 "TEXT",
                 List.of(),
-                List.of(new RagQueryResponse.Source(UUID.randomUUID(), null, 12, "인용"))));
+                List.of(source(UUID.randomUUID(), null))));
     given(termsChunkQueryService.findChunksIn(any(), anyList())).willReturn(List.of());
 
     ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
@@ -271,6 +271,11 @@ class ChatQueryServiceTest {
 
   private RagQueryResponse answer(String text) {
     return new RagQueryResponse(text, "TEXT", List.of(), List.of());
+  }
+
+  private RagQueryResponse.Source source(UUID chunkId, UUID documentId) {
+    return new RagQueryResponse.Source(
+        chunkId, documentId, 1, "휴대품손해 특별약관", 12, 12, 12, "COVERAGE", "조항 원문 전체", "인용", true);
   }
 
   private ChatMessage assistantMessage(String content) {
