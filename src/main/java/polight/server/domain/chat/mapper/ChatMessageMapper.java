@@ -53,8 +53,8 @@ public class ChatMessageMapper {
   /**
    * AI가 돌려준 근거에 조항 위치를 채운다.
    *
-   * <p>AI는 {@code chunkId}·{@code documentId}·{@code page}·{@code quote}만 보낸다. 조항 제목과 경로는 {@code
-   * policy_terms_chunks}에 있으므로 서버가 붙인다.
+   * <p>조항 제목·경로·페이지·성격과 원문 전체는 {@code policy_terms_chunks}에서 붙인다. AI도 같은 값을 함께
+   * 보내지만, 질의에 지목한 약관에 속한 것으로 확인된 청크가 있으면 그쪽이 우선이다.
    *
    * @param scopedChunks 질의에 지목한 약관에 속한 것으로 확인된 청크. 여기 없는 {@code chunkId}는 위치 없이 인용문만 남긴다
    */
@@ -75,11 +75,25 @@ public class ChatMessageMapper {
 
   private SourceResponse toSource(RagQueryResponse.Source source, PolicyTermsChunk chunk) {
     if (chunk == null) {
-      // AI가 보낸 chunkId를 DB에서 찾지 못했거나 질의에 지목한 약관 밖의 청크였다. 인용문은
-      // AI 응답에 이미 들어 있으므로 버리지 않고, 위치만 비운다.
+      // AI가 보낸 chunkId를 DB에서 찾지 못했거나 질의에 지목한 약관 밖의 청크였다.
+      //
+      // 예전에는 위치를 통째로 비웠다. 이제 AI가 같은 값을 함께 보내므로 그것으로 채운다 --
+      // 조항 제목도 원문도 없이 인용문만 떠 있는 것보다는 낫다. 다만 이 값들은 우리가 약관
+      // 소속을 확인하지 못한 것이라 아래 분기의 값과 신뢰도가 같지 않고, clausePath 는 AI가
+      // 보내지 않아 여전히 빈다. 이 경로로 들어오는 것 자체가 비정상이며
+      // warnIfNoChunkResolved 가 서버 쪽에 흔적을 남긴다.
       return new SourceResponse(
-          source.chunkId(), source.documentId(), null, null, source.page(), source.page(),
-          source.quote());
+          source.chunkId(),
+          source.documentId(),
+          source.index(),
+          source.sectionTitle(),
+          null,
+          firstNonNull(source.pageStart(), source.page()),
+          firstNonNull(source.pageEnd(), source.page()),
+          source.clauseType(),
+          source.quote(),
+          source.text(),
+          source.cited());
     }
 
     return new SourceResponse(
@@ -88,11 +102,24 @@ public class ChatMessageMapper {
         // 있고, 있더라도 그것은 "누가 올린 파일인가"라서 근거의 위치가 아니다. AI가 보낸 값을
         // 그대로 흘린다 -- 없으면 null 이고, 응답 스키마는 그대로다.
         source.documentId(),
+        // 답변 안에서 몇 번째 근거인가. 청크에는 없는 값이라 AI 것을 쓴다. chunk.chunkIndex 는
+        // "약관 안에서 몇 번째 청크인가"라서 뜻이 다르다 -- 섞으면 안 된다.
+        source.index(),
         chunk.getSectionTitle(),
         chunk.getClausePath(),
         chunk.getPageStart(),
         chunk.getPageEnd(),
-        source.quote());
+        chunk.getClauseType() == null ? null : chunk.getClauseType().name(),
+        source.quote(),
+        // 조항 원문 전체. AI도 text 로 같은 것을 보내지만 DB 값을 쓴다 -- 질의에 지목한 약관에
+        // 속한 것으로 이미 확인된 청크라 어느 약관의 본문인지가 보장된다.
+        chunk.getContent(),
+        source.cited());
+  }
+
+  /** 앞의 값을 쓰되 없으면 뒤의 값. AI가 pageStart/pageEnd 를 보내기 전에는 page 하나만 온다. */
+  private static Integer firstNonNull(Integer preferred, Integer fallback) {
+    return preferred != null ? preferred : fallback;
   }
 
   /**
