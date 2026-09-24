@@ -522,15 +522,20 @@ Content-Type: application/json
   "messageId": "3ab7...",
   "answer": "4시간 이상 지연 시 지연비용 특약으로 보상됩니다. 다만 …",
   "responseType": "TEXT",
+  "suggestedContacts": [],
   "sources": [
     {
       "chunkId": "11111111-…",
       "documentId": "22222222-…",
+      "index": 1,
       "sectionTitle": "제3관 배상책임 특별약관",
       "clausePath": "제3관 > 제12조",
       "pageStart": 12,
       "pageEnd": 12,
-      "quote": "항공기 지연으로 인하여 …"
+      "clauseType": "COVERAGE",
+      "quote": "항공기 지연으로 인하여 …",
+      "text": "제12조(보상하는 손해) ① 회사는 피보험자가 해외여행 도중에 … (조항 전문)",
+      "cited": true
     }
   ]
 }
@@ -544,8 +549,18 @@ Content-Type: application/json
 - **대화 이력을 보낼 필요가 없습니다.** 서버가 직전 6개(3턴)를 잘라 AI에 전달합니다. 화면에 이전 대화를 그릴 때는 3.13로 받아 오세요.
 - **검색 범위는 여행 전체**입니다. 그 여행에 올린 약관이 모두 대상이며, 문서를 지정하는 파라미터는 없습니다.
 - `responseType`은 **현재 항상 `TEXT`** 입니다. 병원 카드 같은 카드형 응답은 표시할 데이터 출처가 아직 없어 내려가지 않습니다.
-- `sources`는 답변의 근거가 된 약관 원문입니다. 화면에 쓰지 않아도 되지만, 답변이 이상할 때 어느 조항을 보고 답했는지 확인할 수 있습니다. 빈 배열일 수 있습니다.
-- `sectionTitle`·`clausePath`·`pageStart`·`pageEnd`는 **비어 있을 수 있습니다.** 그때도 `quote`는 남습니다.
+- `suggestedContacts`는 **이 답변과 함께 띄우면 좋은 현지 연락처 종류**입니다. 번호가 아니라 종류만 옵니다 — 실제 번호는 프론트가 가진 연락처 화면에서 보여주세요.
+  - 값은 `HOSPITAL`(부상·질병·치료) / `POLICE`(도난·분실·폭행) / `EMBASSY`(여권 분실, 체포·구금, 사망·실종) 중 **0개 이상**입니다. 단순 약관·보장 문의면 빈 배열입니다.
+  - **여러 개가 올 수 있습니다.** "여권을 도난당했어요"는 `["POLICE", "EMBASSY"]` 입니다.
+  - `responseType`은 이때도 **`TEXT` 그대로**입니다. 약관 답변과 연락처 안내가 함께 필요한 경우라, 카드로 바꾸면 보상 설명이 사라집니다. 답변 말풍선은 평소처럼 그리고 연락처는 **곁들여** 띄우세요.
+  - 목록에 없는 값이 올 수 있습니다(AI가 종류를 늘리는 경우). **모르는 값은 무시**하세요 — 서버는 막지 않고 그대로 내려줍니다.
+- `sources`는 답변의 근거가 된 약관 조항입니다. 빈 배열일 수 있습니다.
+  - **`quote`와 `text`는 다릅니다.** `quote`는 AI가 고른 **짧은 발췌**로 말풍선 옆에 붙이는 용도이고, `text`는 그 조항의 **원문 전체**입니다. "약관 원문" 화면처럼 잘리지 않은 본문을 보여줄 때는 `text`를 쓰세요 — 수천 자일 수 있으니 스크롤을 두세요.
+  - `index`는 답변 안에서 이 근거가 몇 번째인지입니다. 각주 번호를 붙일 때 씁니다.
+  - `cited`는 이 근거가 답변 문장에 실제로 인용됐는지입니다. **`null`이면 "모름"이므로 걸러내지 말고 그대로 그리세요** — 이 필드가 붙기 전에 저장된 메시지는 `null`입니다.
+  - `clauseType`은 조항의 성격입니다(`GENERAL` `COVERAGE` `EXCLUSION` `CONDITION` `LIMIT` `DEFINITION` `PROCEDURE` `REQUIRED_DOCUMENT`). 목록에 없는 값이 올 수 있으니 **모르는 값은 무시**하세요.
+- `sectionTitle`·`clausePath`·`pageStart`·`pageEnd`·`clauseType`·`text`는 **비어 있을 수 있습니다.** 그때도 `quote`는 남습니다.
+  - 이 값들은 서버가 `policy_terms_chunks`에서 채웁니다. 질의에 지목한 약관에 속한 청크를 찾지 못하면 AI가 함께 보낸 값으로 채우고, 그것도 없으면 빕니다. `clausePath`는 AI가 보내지 않으므로 이 경우 항상 빕니다.
 
 > ⚠️ **응답까지 수 초 걸립니다.** 검색과 답변 생성을 기다리는 동기 호출이라 클라이언트 타임아웃을 넉넉히(60초 이상) 두세요. 완료 알림(WebSocket/SSE)은 없습니다.
 >
@@ -578,6 +593,7 @@ GET /api/v1/trips/{tripId}/chat/messages?limit=50
       "sender": "USER",
       "content": "항공편이 지연되면 보상되나요?",
       "responseType": "TEXT",
+      "suggestedContacts": [],
       "sources": [],
       "createdAt": "2026-08-21T14:14:02"
     },
@@ -586,15 +602,20 @@ GET /api/v1/trips/{tripId}/chat/messages?limit=50
       "sender": "ASSISTANT",
       "content": "4시간 이상 지연 시 …",
       "responseType": "TEXT",
+      "suggestedContacts": [],
       "sources": [
         {
           "chunkId": "11111111-…",
           "documentId": "22222222-…",
+          "index": 1,
           "sectionTitle": "제3관 배상책임 특별약관",
           "clausePath": "제3관 > 제12조",
           "pageStart": 12,
           "pageEnd": 12,
-          "quote": "항공기 지연으로 인하여 …"
+          "clauseType": "COVERAGE",
+          "quote": "항공기 지연으로 인하여 …",
+          "text": "제12조(보상하는 손해) ① 회사는 피보험자가 해외여행 도중에 … (조항 전문)",
+          "cited": true
         }
       ],
       "createdAt": "2026-08-21T14:14:09"
@@ -617,7 +638,9 @@ GET /api/v1/trips/{tripId}/chat/messages?limit=50
 - `sender`가 `USER`면 사용자 말풍선, `ASSISTANT`면 챗봇 말풍선입니다. `SYSTEM`은 현재 생성되지 않습니다.
 - `messages[]` 항목은 **3.12 응답과 같은 모양**입니다(`messageId`·`content`·`responseType`·`sources`). 질문을 보낸 직후 화면에 붙이는 객체와 이력에서 받은 객체를 다르게 다룰 필요가 없습니다.
 - `createdAt`은 말풍선 시각 표시용입니다. 타임존 없는 로컬 시각(서버 TZ = UTC)으로 내려갑니다.
-- 사용자 메시지의 `sources`는 **항상 빈 배열**입니다.
+- 사용자 메시지의 `sources`와 `suggestedContacts`는 **항상 빈 배열**입니다.
+- 이 API가 붙기 전에 저장된 챗봇 메시지는 `suggestedContacts`가 빈 배열로 나옵니다. 그때 받은 연락처를 되살릴 방법은 없습니다.
+- `sources`는 **답변받은 그 시점의 약관 본문 그대로** 저장해 되돌려줍니다. 약관이 개정돼도 과거 상담 기록에는 사용자가 그때 본 문장이 남습니다. 다만 `text`·`clauseType`·`index`·`cited`가 붙기 전에 저장된 메시지는 그 필드들이 `null`입니다.
 
 > ⚠️ **더 오래된 대화를 이어서 받는 방법(커서 페이지네이션)은 아직 없습니다.** 세션이 여행당 하나이고 닫는 시점이 없어 대화가 계속 쌓이므로, 응답 크기를 막기 위해 최근 N개만 내려줍니다. "더 보기"가 필요해지면 그때 추가합니다.
 

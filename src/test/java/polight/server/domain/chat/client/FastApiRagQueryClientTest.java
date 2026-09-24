@@ -47,6 +47,69 @@ class FastApiRagQueryClientTest {
   }
 
   @Test
+  void parsesNewSourceChunkFields() {
+    String body =
+        """
+        {
+          "answer": "최대 19만원까지 보상됩니다.",
+          "responseType": "TEXT",
+          "suggestedContacts": ["POLICE"],
+          "sources": [
+            {
+              "chunkId": "11111111-1111-1111-1111-111111111111",
+              "documentId": "22222222-2222-2222-2222-222222222222",
+              "index": 1,
+              "sectionTitle": "휴대품손해 특별약관",
+              "page": 51,
+              "pageStart": 51,
+              "pageEnd": 52,
+              "clauseType": "COVERAGE",
+              "text": "제1조(보상하는 손해) ① 회사는 피보험자가 해외여행 도중에 …",
+              "quote": "보험가입금액 한도 내에서",
+              "cited": true
+            }
+          ]
+        }
+        """;
+
+    RagQueryResponse.Source source = client(ok(body)).query(request()).sources().get(0);
+
+    assertThat(source.index()).isEqualTo(1);
+    assertThat(source.sectionTitle()).isEqualTo("휴대품손해 특별약관");
+    assertThat(source.pageStart()).isEqualTo(51);
+    assertThat(source.pageEnd()).isEqualTo(52);
+    assertThat(source.clauseType()).isEqualTo("COVERAGE");
+    assertThat(source.text()).startsWith("제1조(보상하는 손해)");
+    assertThat(source.cited()).isTrue();
+    // page/quote 는 새 필드가 생긴 뒤에도 그대로 온다.
+    assertThat(source.page()).isEqualTo(51);
+    assertThat(source.quote()).isEqualTo("보험가입금액 한도 내에서");
+  }
+
+  @Test
+  void ignoresFieldsTheBackendDoesNotKnowYet() {
+    String body =
+        """
+        {
+          "answer": "보상됩니다.",
+          "responseType": "TEXT",
+          "sources": [
+            {
+              "chunkId": "11111111-1111-1111-1111-111111111111",
+              "quote": "인용",
+              "confidence": 0.93,
+              "rerankScore": 12.5
+            }
+          ],
+          "debugTrace": {"retrievedCount": 8}
+        }
+        """;
+
+    // AI가 먼저 배포해도 챗봇이 500 이 되지 않아야 한다. 모르는 필드는 조용히 버린다.
+    assertThat(client(ok(body)).query(request()).sources()).hasSize(1);
+  }
+
+  @Test
   void retriesOnceWhenConnectionFails() {
     AtomicInteger attempts = new AtomicInteger();
     RestClient restClient =

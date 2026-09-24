@@ -32,7 +32,7 @@ import polight.server.domain.chat.entity.ChatSender;
 import polight.server.domain.chat.entity.ChatSession;
 import polight.server.domain.chat.mapper.ChatMessageMapper;
 import polight.server.domain.chat.service.CertificateContextProvider.CertificateContext;
-import polight.server.domain.rag.service.RagSearchScopeService;
+import polight.server.domain.terms.service.TermsChunkQueryService;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -41,7 +41,7 @@ class ChatQueryServiceTest {
   @Mock private ChatSessionService chatSessionService;
   @Mock private ChatMessageService chatMessageService;
   @Mock private CertificateContextProvider certificateContextProvider;
-  @Mock private RagSearchScopeService ragSearchScopeService;
+  @Mock private TermsChunkQueryService termsChunkQueryService;
   @Mock private RagQueryClient ragQueryClient;
   @Mock private ChatMessageMapper chatMessageMapper;
 
@@ -61,7 +61,7 @@ class ChatQueryServiceTest {
             chatSessionService,
             chatMessageService,
             certificateContextProvider,
-            ragSearchScopeService,
+            termsChunkQueryService,
             ragQueryClient,
             chatMessageMapper);
 
@@ -73,6 +73,7 @@ class ChatQueryServiceTest {
         .willReturn(new CertificateContext(termsId, List.of(), false));
     given(ragQueryClient.query(any())).willReturn(answer("보상됩니다."));
     given(chatMessageMapper.toSources(any(), anyList())).willReturn(List.of());
+    given(chatMessageMapper.toSuggestedContacts(any())).willReturn(List.of());
     given(chatMessageService.appendAssistantMessage(eq(sessionId), any(), any()))
         .willReturn(assistantMessage("보상됩니다."));
   }
@@ -164,7 +165,7 @@ class ChatQueryServiceTest {
   @Test
   void storesAnswerAsTextEvenWhenAiSendsCardType() {
     given(ragQueryClient.query(any()))
-        .willReturn(new RagQueryResponse("병원 목록입니다.", "HOSPITAL_CARDS", List.of()));
+        .willReturn(new RagQueryResponse("병원 목록입니다.", "HOSPITAL_CARDS", List.of(), List.of()));
 
     ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("병원 알려줘"));
 
@@ -187,29 +188,77 @@ class ChatQueryServiceTest {
 
   @Test
   void doesNotLookUpChunksWhenAiReturnsNoSources() {
-    given(ragQueryClient.query(any())).willReturn(new RagQueryResponse("모르겠습니다.", "TEXT", null));
+    given(ragQueryClient.query(any())).willReturn(new RagQueryResponse("모르겠습니다.", "TEXT", null, null));
 
     service.ask(userId, tripId, new ChatQuestionRequest("이건 뭐죠?"));
 
-    verify(ragSearchScopeService, org.mockito.Mockito.never()).findOwnedChunks(any(), anyList());
+    verify(termsChunkQueryService, org.mockito.Mockito.never()).findChunksIn(any(), anyList());
     verify(chatMessageService).appendAssistantMessage(eq(sessionId), eq("모르겠습니다."), any());
   }
 
   @Test
-  void filtersSourceChunksByOwner() {
+  void looksUpSourceChunksInTheTermsItSearched() {
     UUID chunkId = UUID.randomUUID();
     given(ragQueryClient.query(any()))
         .willReturn(
             new RagQueryResponse(
                 "보상됩니다.",
                 "TEXT",
-                List.of(new RagQueryResponse.Source(chunkId, UUID.randomUUID(), 12, "인용"))));
-    given(ragSearchScopeService.findOwnedChunks(eq(userId), anyList())).willReturn(List.of());
+                List.of(),
+                List.of(source(chunkId, UUID.randomUUID()))));
+    given(termsChunkQueryService.findChunksIn(eq(termsId), anyList())).willReturn(List.of());
 
     service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
 
-    // AI가 돌려준 chunkId를 그대로 믿지 않고 소유자로 한 번 더 거른다.
-    verify(ragSearchScopeService).findOwnedChunks(userId, List.of(chunkId));
+    // 검색 범위로 이 약관 하나를 지목했으므로 돌아온 청크도 그 약관의 것이어야 한다.
+    // 범위 없이 조회하면 다른 약관의 조항 제목이 이 답변의 근거로 실린다.
+    verify(termsChunkQueryService).findChunksIn(termsId, List.of(chunkId));
+  }
+
+  @Test
+  void stillAnswersWhenNoSourceChunkIsFound() {
+    given(ragQueryClient.query(any()))
+        .willReturn(
+            new RagQueryResponse(
+                "보상됩니다.",
+                "TEXT",
+                List.of(),
+                List.of(source(UUID.randomUUID(), null))));
+    given(termsChunkQueryService.findChunksIn(any(), anyList())).willReturn(List.of());
+
+    ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
+
+    // 비는 것은 조항 위치뿐이고 인용문은 AI 응답에 이미 들어 있다. 답을 막을 이유가 없다.
+    assertThat(response.answer()).isEqualTo("보상됩니다.");
+    verify(chatMessageService).appendAssistantMessage(eq(sessionId), eq("보상됩니다."), any());
+  }
+
+  @Test
+  void passesSuggestedContactsFromAiToTheResponse() {
+    given(ragQueryClient.query(any()))
+        .willReturn(new RagQueryResponse("경찰에 신고하세요.", "TEXT", List.of("POLICE"), List.of()));
+    given(chatMessageMapper.toSuggestedContacts(any())).willReturn(List.of("POLICE"));
+    given(chatMessageService.appendAssistantMessage(eq(sessionId), any(), any()))
+        .willReturn(assistantMessage("경찰에 신고하세요."));
+
+    ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("도난당했어요"));
+
+    assertThat(response.suggestedContacts()).containsExactly("POLICE");
+    // 이력 조회도 같은 모양이어야 하므로 metadata_json 에 함께 저장한다.
+    verify(chatMessageMapper).toMetadataJson(anyList(), eq(List.of("POLICE")), anyLong());
+  }
+
+  @Test
+  void sendsNoContactsWhenAiCallIsSkipped() {
+    given(certificateContextProvider.load(userId, tripId))
+        .willReturn(new CertificateContext(null, List.of(), false));
+    given(chatMessageService.appendAssistantMessage(sessionId, ChatQueryService.NO_TERMS_ANSWER, null))
+        .willReturn(assistantMessage(ChatQueryService.NO_TERMS_ANSWER));
+
+    ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("도난당했어요"));
+
+    // 사고 정황인지 판단하는 주체는 답변 LLM인데 그 호출을 건너뛰었다.
+    assertThat(response.suggestedContacts()).isEmpty();
   }
 
   @Test
@@ -217,11 +266,16 @@ class ChatQueryServiceTest {
     service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
 
     // 답변이 느릴 때 검색·생성 어느 쪽 문제인지 나누려면 저장해 둔 값이 있어야 한다.
-    verify(chatMessageMapper).toMetadataJson(anyList(), anyLong());
+    verify(chatMessageMapper).toMetadataJson(anyList(), anyList(), anyLong());
   }
 
   private RagQueryResponse answer(String text) {
-    return new RagQueryResponse(text, "TEXT", List.of());
+    return new RagQueryResponse(text, "TEXT", List.of(), List.of());
+  }
+
+  private RagQueryResponse.Source source(UUID chunkId, UUID documentId) {
+    return new RagQueryResponse.Source(
+        chunkId, documentId, 1, "휴대품손해 특별약관", 12, 12, 12, "COVERAGE", "조항 원문 전체", "인용", true);
   }
 
   private ChatMessage assistantMessage(String content) {
