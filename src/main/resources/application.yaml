@@ -126,9 +126,17 @@ ai:
     rag-path: ${AI_SERVER_RAG_PATH:/internal/rag/query}
     rag-read-timeout: ${AI_SERVER_RAG_READ_TIMEOUT:60s}
 
-    # 챗봇에 실어 보낼 대화 이력 길이. AI 서버와 6개(3턴)로 합의했다.
-    # 프롬프트 길이를 예측 가능하게 두기 위한 값이라 양쪽이 같이 움직여야 한다.
-    chat-history-size: ${AI_SERVER_CHAT_HISTORY_SIZE:6}
+    # 챗봇에 실어 보낼 대화 이력 길이. 6개(3턴)로 합의했던 값을 10개(5턴)로 올린다.
+    # 3턴이면 그 앞의 맥락이 통째로 사라져 후속 질문이 겉돌았다. 근본 해결(오래된 턴을
+    # 요약해 함께 싣기)은 따로 설계 중이고, 이건 그 전까지 쓰는 값이다.
+    #
+    # AI 서버는 이 값을 몰라도 된다. 받은 이력을 그대로 프롬프트의 [이전 대화]에 펼치고,
+    # 질의 재작성만 그중 마지막 6턴을 쓴다(query_rewriter.MAX_TURNS). 즉 이 숫자는
+    # 백엔드 혼자 움직일 수 있고, 올린 만큼 답변 프롬프트의 맥락이 늘어난다.
+    #
+    # 올릴수록 프롬프트가 길어져 비용과 지연이 함께 오른다. 배포 후 응답 시간을 보고
+    # 조정한다 -- 재배포 없이 AI_SERVER_CHAT_HISTORY_SIZE 로 바꿀 수 있다.
+    chat-history-size: ${AI_SERVER_CHAT_HISTORY_SIZE:10}
     max-attempts: ${AI_SERVER_MAX_ATTEMPTS:3}
     retry-delay: ${AI_SERVER_RETRY_DELAY:500ms}
 
