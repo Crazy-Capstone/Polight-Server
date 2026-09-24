@@ -19,9 +19,6 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Array;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import polight.server.domain.analysis.entity.AnalysisResult;
 import polight.server.domain.common.entity.BaseTimeEntity;
 import polight.server.domain.insurance.entity.PolicyDocument;
@@ -45,8 +42,6 @@ import polight.server.domain.user.entity.User;
     })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PolicyChunk extends BaseTimeEntity {
-
-  public static final int EMBEDDING_DIMENSION = 1536;
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
@@ -100,10 +95,17 @@ public class PolicyChunk extends BaseTimeEntity {
   @Column(columnDefinition = "TEXT")
   private String summary;
 
-  @JdbcTypeCode(SqlTypes.VECTOR)
-  @Array(length = EMBEDDING_DIMENSION)
-  @Column(name = "embedding", columnDefinition = "vector(1536)")
-  private float[] embedding;
+  // embedding 컬럼은 매핑하지 않는다.
+  //
+  // pgvector 의 vector(1536) 인데, 이 프로젝트에는 hibernate-vector 가 없어
+  // @JdbcTypeCode(SqlTypes.VECTOR) 가 해석되지 않는다. Hibernate 는 float[] 을
+  // VARBINARY(자바 직렬화)로 폴백해 읽으려 하고, 실제로 오는 값은 "[0.2,..." 라는
+  // pgvector 텍스트라 엔티티를 만드는 순간 SerializationException 으로 터진다.
+  //
+  // 의존성을 넣어 제대로 매핑할 수도 있지만 그럴 이유가 없다. 벡터 검색은 AI 서버가
+  // 하고 백엔드는 이 값을 읽지도 쓰지도 않는다. 매핑하면 청크마다 1536개 float 을
+  // 함께 실어 오기만 한다. 컬럼은 DB 에 그대로 있고 AI 서버가 계속 쓴다 --
+  // ddl-auto=validate 는 매핑되지 않은 컬럼을 문제 삼지 않는다.
 
   @Column(name = "char_count", nullable = false)
   private int charCount;
@@ -121,7 +123,6 @@ public class PolicyChunk extends BaseTimeEntity {
       PolicyChunkClauseType clauseType,
       String content,
       String summary,
-      float[] embedding,
       Integer charCount) {
     this.analysisResult = Objects.requireNonNull(analysisResult, "analysisResult는 필수입니다.");
     this.document = Objects.requireNonNull(analysisResult.getDocument(), "analysisResult.document는 필수입니다.");
@@ -137,7 +138,6 @@ public class PolicyChunk extends BaseTimeEntity {
     this.clauseType = clauseType == null ? PolicyChunkClauseType.GENERAL : clauseType;
     this.content = Objects.requireNonNull(content, "content는 필수입니다.");
     this.summary = summary;
-    this.embedding = embedding;
     this.charCount = charCount == null ? content.length() : charCount;
   }
 
