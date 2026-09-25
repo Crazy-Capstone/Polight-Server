@@ -49,7 +49,14 @@ public enum ErrorCode {
 
   // 챗봇
   CHAT_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "대화 세션을 찾을 수 없습니다."),
-  AI_CHAT_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "AI 서버에서 답변을 받지 못했습니다.");
+  AI_CHAT_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "AI 서버에서 답변을 받지 못했습니다."),
+
+  /**
+   * 약관 매칭을 물어보지 못했다. "맞는 약관이 없다"와 다르다 -- 그쪽은 오류가 아니라 정상 갈래라 이 코드를 쓰지 않는다.
+   *
+   * <p>사용자 요청에 직접 실려 나가지는 않는다. 증권 분석 콜백이 커밋된 뒤 배경에서 일어나는 일이라 호출부가 삼키고 로그만 남긴다.
+   */
+  AI_TERMS_MATCH_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "AI 서버에서 약관 매칭 결과를 받지 못했습니다.");
 
   private final HttpStatus status;
   private final String message;

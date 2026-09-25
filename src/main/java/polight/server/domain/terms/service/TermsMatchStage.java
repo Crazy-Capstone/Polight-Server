@@ -5,6 +5,10 @@ package polight.server.domain.terms.service;
  *
  * <p>연결 자체는 {@code analysis_results.matched_terms_id} 하나로 남지만, 어떻게 찾았는지는 남지 않는다. 근거 조항을 화면에
  * 보여주거나 챗봇 답변에 인용할 때 신뢰도를 함께 판단해야 해서 호출부에 이 값을 돌려준다.
+ *
+ * <p><b>이 어휘는 AI 서버와 공유한다.</b> {@code /internal/terms/match} 의 {@code level} 이 같은 값을 쓴다. 한쪽이
+ * 늘리면 다른 쪽도 늘려야 하므로, 여기서만 쓰는 값을 더하지 않는다 -- 그러면 같은 이름의 어휘가 두 벌이 되어 어느 쪽이 정본인지
+ * 알 수 없게 된다.
  */
 public enum TermsMatchStage {
 
