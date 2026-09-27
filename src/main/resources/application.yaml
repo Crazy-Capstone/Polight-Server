@@ -96,6 +96,17 @@ oauth:
     redirect-uri: ${KAKAO_REDIRECT_URI}
     client-secret: ${KAKAO_CLIENT_SECRET:}
 
+terms:
+  matching:
+    # local: 백엔드가 policy_terms 를 직접 뒤진다(기본값)
+    # ai:    AI 서버 /internal/terms/match 에 맡긴다
+    #
+    # AI 쪽은 표기 정규화로는 닿지 않는 것까지 안다 -- 약관코드, 보험사 별칭, 인수사 이력
+    # (한화손해보험이 인수하기 전 캐롯 약관 같은 것). 대신 판정 기준이 이 저장소 밖에 있고,
+    # 잘못 붙은 약관은 연결이 없는 것보다 나쁘다. 그래서 되돌릴 수 있게 설정으로 둔다 --
+    # 재배포 없이 TERMS_MATCHING_PROVIDER 로 바꾼다.
+    provider: ${TERMS_MATCHING_PROVIDER:local}
+
 storage:
   # local: 로컬 파일시스템(개발 기본값) / s3: S3 버킷(배포)
   type: ${STORAGE_TYPE:local}
@@ -124,6 +135,11 @@ ai:
     # 10s로 충분하지만, 질의는 검색과 LLM 생성이 끝날 때까지 응답을 기다린다.
     # read-timeout을 그대로 쓰면 정상 응답을 타임아웃으로 오인해 버린다.
     rag-path: ${AI_SERVER_RAG_PATH:/internal/rag/query}
+    terms-match-path: ${AI_SERVER_TERMS_MATCH_PATH:/internal/terms/match}
+
+    # 매칭은 AI 쪽에서도 DB 조회 한 번이라 오래 걸릴 일이 없다. 길게 잡으면 AI 가 멈췄을 때
+    # 증권 분석 콜백 스레드가 그만큼 붙잡힌다.
+    terms-match-read-timeout: ${AI_SERVER_TERMS_MATCH_READ_TIMEOUT:10s}
     rag-read-timeout: ${AI_SERVER_RAG_READ_TIMEOUT:60s}
 
     # 챗봇에 실어 보낼 대화 이력 길이. 6개(3턴)로 합의했던 값을 10개(5턴)로 올린다.

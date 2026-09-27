@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import polight.server.domain.analysis.dto.AnalysisCallbackRequest;
@@ -13,12 +14,9 @@ import polight.server.domain.analysis.dto.AnalysisCallbackRequest.CoverageItemPa
 import polight.server.domain.analysis.entity.AnalysisResult;
 import polight.server.domain.analysis.entity.CoverageItem;
 import polight.server.domain.analysis.entity.CoverageStatus;
+import polight.server.domain.analysis.event.AnalysisCompletedEvent;
 import polight.server.domain.analysis.repository.AnalysisResultRepository;
 import polight.server.domain.analysis.repository.CoverageItemRepository;
-import polight.server.domain.terms.service.CoverageTermsLinkSummary;
-import polight.server.domain.terms.service.CoverageTermsLinker;
-import polight.server.domain.terms.service.PolicyTermsMatchingService;
-import polight.server.domain.terms.service.TermsMatch;
 import polight.server.global.exception.BaseException;
 import polight.server.global.exception.ErrorCode;
 
@@ -35,9 +33,9 @@ import polight.server.global.exception.ErrorCode;
  *   <li>{@code sort_order} — 배열 순서로 부여한다. AI는 배열을 화면에 보여줄 순서(중요도 순)로만 정렬해 보낸다
  * </ul>
  *
- * <p>완료 콜백은 담보를 저장한 뒤 <b>약관 연결</b>까지 한다. AI는 "어느 약관인가"를 보내지 않으므로, 콜백으로 받은 보험사/상품명으로 백엔드가
- * {@code policy_terms}를 찾는다({@link PolicyTermsMatchingService}). 재수신해도 같은 이름으로 같은 약관을 다시 찾으므로
- * 이 단계도 멱등하다.
+ * <p>담보를 저장한 뒤 <b>약관 연결</b>까지 이어지지만, 그 단계는 이 트랜잭션 안에서 하지 않는다. 커밋 후
+ * {@link polight.server.domain.analysis.event.AnalysisTermsLinkEventListener}가 이어받는다 -- 이유는 그쪽에 적어 두었다.
+ * 재수신해도 같은 이름으로 같은 약관을 다시 찾으므로 그 단계도 멱등하다.
  */
 @Slf4j
 @Service
@@ -46,8 +44,7 @@ public class AnalysisCallbackService {
 
   private final AnalysisResultRepository analysisResultRepository;
   private final CoverageItemRepository coverageItemRepository;
-  private final PolicyTermsMatchingService policyTermsMatchingService;
-  private final CoverageTermsLinker coverageTermsLinker;
+  private final ApplicationEventPublisher eventPublisher;
 
   /**
    * 분석 완료 콜백.
@@ -76,26 +73,15 @@ public class AnalysisCallbackService {
         LocalDateTime.now());
     result.getDocument().markParseCompleted();
 
-    // 보험사/상품명이 방금 채워졌으니 여기서 바로 약관을 찾는다.
-    //
-    // 같은 트랜잭션 안에서 하는 이유: 연결이 나중에 따로 서면, 그 사이에 조회한 분석 결과는
-    // 완료 상태인데 약관만 비어 있다. 프론트는 그것을 "약관 없음"으로 보고 사용자에게 약관
-    // 업로드를 요청하게 된다 -- 잠시 뒤면 붙을 약관인데도.
-    //
-    // 매칭은 후보 목록을 한 번 읽어 메모리에서 비교하는 것이 전부라 콜백 응답을 늦추지 않는다.
-    TermsMatch termsMatch = policyTermsMatchingService.matchAndLink(result);
-
-    // 약관이 정해졌으니 담보 하나하나를 그 약관의 보장 규칙에 붙인다. 순서가 강제된다 --
-    // 어느 약관인지 모르면 어느 규칙을 찾을지도 정할 수 없다.
-    CoverageTermsLinkSummary linkSummary = coverageTermsLinker.link(result, savedItems);
+    // 보험사/상품명이 방금 채워졌으니 이제 약관을 찾을 수 있다. 다만 이 트랜잭션에서는 하지
+    // 않는다 -- 곧 AI 서버 호출로 바뀔 자리라, DB 커넥션을 쥔 채 HTTP 를 기다리게 된다.
+    // 커밋 뒤에 AnalysisTermsLinkEventListener 가 이어받는다.
+    eventPublisher.publishEvent(new AnalysisCompletedEvent(analysisResultId));
 
     log.info(
-        "분석 완료 콜백 반영: analysisResultId={}, 담보 {}건, 약관 매칭={}, 규칙 연결 {}/{}건",
+        "분석 완료 콜백 반영: analysisResultId={}, 담보 {}건 (약관 연결은 커밋 후 진행)",
         analysisResultId,
-        savedItems.size(),
-        termsMatch.stage(),
-        linkSummary.linked(),
-        linkSummary.total());
+        savedItems.size());
   }
 
   /** 분석 실패 콜백. 담보 트리는 건드리지 않는다. 실패 전에 저장된 것이 있으면 그대로 남는다. */
@@ -115,7 +101,7 @@ public class AnalysisCallbackService {
         .orElseThrow(() -> new BaseException(ErrorCode.ANALYSIS_RESULT_NOT_FOUND));
   }
 
-  /** @return 저장된 담보. 뒤이어 약관 규칙에 붙일 대상이라 돌려준다 */
+  /** @return 저장된 담보. 로그에 건수를 남기려고 돌려준다 -- 약관 규칙 연결은 커밋 후 리스너가 다시 읽는다 */
   private List<CoverageItem> replaceCoverageItems(
       AnalysisResult result, List<CoverageItemPayload> payloads) {
     deleteCoverageItems(result.getId());

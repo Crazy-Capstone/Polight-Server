@@ -69,6 +69,13 @@ public class AnalysisResultController {
           - `selectedConcerns[].covered` 가 false 이면 그 걱정에 해당하는 담보를 찾지 못한 것입니다.
             `coveragesComplete` 가 false 인 동안에는 "가입하지 않았다"로 단정할 수 없습니다.
           - `status` 가 COMPLETED 가 아니면 `coverages` 와 `selectedConcerns` 는 빈 목록입니다.
+          - `termsNotice` 는 **이 분석이 어느 약관을 근거로 삼았는지 알리는 문구**입니다.
+            - `null` 이면 가입하신 상품의 약관을 정확히 찾은 것이니 **아무것도 띄우지 마세요.**
+            - 값이 있으면 근거가 확실하지 않다는 뜻입니다. 담보 목록 위에 그대로 보여 주세요
+              (예: "2026-06-06 개정 약관을 기준으로 안내해 드려요. 실제 가입하신 약관과 다를 수 있어요.").
+            - 문구는 서버가 만듭니다. 프론트에서 다시 쓰지 마세요 -- 판단 근거를 아는 쪽이 써야 맞고,
+              양쪽에 두면 서로 어긋납니다.
+            - 분석이 끝나기 전에는 항상 `null` 입니다. 약관 연결이 분석 뒤에 서기 때문입니다.
           """)
   public CoverageAnalysisResponse getCoverages(
       @AuthenticationPrincipal UUID userId,

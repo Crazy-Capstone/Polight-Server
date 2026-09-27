@@ -91,8 +91,15 @@ public class CoverageAnalysisService {
     // 분석이 끝나지 않았으면 판정 결과를 내려주지 않는다. 담보가 아직 0건이라
     // "고른 걱정이 전부 미보장"으로 보이는데, 그건 사실이 아니라 아직 모른다는 뜻이다.
     if (result.getStatus() != AnalysisStatus.COMPLETED) {
+      // 분석 중에는 안내도 내리지 않는다. 약관 연결은 분석이 끝난 뒤에 서므로 아직 판단 전이고,
+      // 여기서 "약관을 찾지 못했다"를 띄우면 잠시 뒤 붙을 약관인데도 경고가 먼저 뜬다.
       return new CoverageAnalysisResponse(
-          result.getId(), result.getStatus(), result.isCoveragesComplete(), List.of(), List.of());
+          result.getId(),
+          result.getStatus(),
+          result.isCoveragesComplete(),
+          null,
+          List.of(),
+          List.of());
     }
 
     Trip trip = tripService.getOwnedTrip(userId, tripId);
@@ -108,6 +115,7 @@ public class CoverageAnalysisService {
         result.getId(),
         result.getStatus(),
         result.isCoveragesComplete(),
+        result.getTermsMatchNotice(),
         toSelectedConcerns(selectedConcerns, matchedByItem),
         coverages);
   }
