@@ -129,6 +129,16 @@ services:
 
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
 
+      # 약관 매칭을 누가 하는가. local 이면 백엔드가 policy_terms 를 직접 뒤지고,
+      # ai 면 AI 서버 /internal/terms/match 에 맡긴다.
+      #
+      # AI 쪽은 표기 정규화로는 닿지 않는 것까지 안다 -- 약관코드, 보험사 별칭, 인수사 이력.
+      # 다만 판정 기준이 이 저장소 밖에 있고, 잘못 붙은 약관은 연결이 없는 것보다 나쁘다.
+      # 그래서 이 자리에 두고 .env 에서 local 로 되돌린 뒤 컨테이너만 재시작할 수 있게 한다.
+      #
+      # 기본값이 local 인 것은 이 변수를 넣지 않은 환경의 동작을 바꾸지 않기 위해서다.
+      TERMS_MATCHING_PROVIDER: ${TERMS_MATCHING_PROVIDER:-local}
+
       # 콜백이 오지 않아 PROCESSING 에 멈춘 분석을 FAILED 로 내리기까지의 시간.
       # 실제 분석 소요 시간을 보고 조정한다. 너무 짧으면 정상 분석을 실패로 죽인다.
       ANALYSIS_TIMEOUT_AFTER: ${ANALYSIS_TIMEOUT_AFTER:-10m}
