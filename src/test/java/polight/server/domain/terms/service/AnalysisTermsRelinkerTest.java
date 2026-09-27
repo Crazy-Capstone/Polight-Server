@@ -61,7 +61,7 @@ class AnalysisTermsRelinkerTest {
   @Test
   void keepsExistingTermsWhenNotRematching() {
     AnalysisResult analysis = analysis();
-    analysis.linkTerms(terms());
+    analysis.linkTerms(terms(), "EXACT", null);
     given(analysisResultRepository.findById(analysisResultId)).willReturn(Optional.of(analysis));
     given(coverageItemRepository.findByAnalysisResultIdOrderBySortOrderAsc(analysisResultId))
         .willReturn(List.of());
@@ -77,7 +77,7 @@ class AnalysisTermsRelinkerTest {
   @Test
   void rematchesExistingTermsWhenAsked() {
     AnalysisResult analysis = analysis();
-    analysis.linkTerms(terms());
+    analysis.linkTerms(terms(), "EXACT", null);
     given(analysisResultRepository.findById(analysisResultId)).willReturn(Optional.of(analysis));
     given(coverageItemRepository.findByAnalysisResultIdOrderBySortOrderAsc(analysisResultId))
         .willReturn(List.of());

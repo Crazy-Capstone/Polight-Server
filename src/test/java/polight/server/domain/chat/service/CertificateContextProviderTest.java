@@ -106,7 +106,7 @@ class CertificateContextProviderTest {
             .build();
     UUID termsId = UUID.randomUUID();
     setField(terms, "id", termsId);
-    analysis.linkTerms(terms);
+    analysis.linkTerms(terms, "EXACT", null);
     given(analysisResultRepository.findCompletedCertificateAnalyses(userId, tripId))
         .willReturn(List.of(analysis));
     given(coverageItemRepository.findByAnalysisResultIdOrderBySortOrderAsc(analysis.getId()))
