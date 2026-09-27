@@ -116,7 +116,7 @@ class AnalysisResultServiceTest {
         LocalDate.of(2026, 3, 1),
         LocalDate.of(2026, 3, 6),
         LocalDateTime.now());
-    failed.linkTerms(PolicyTerms.official("삼성화재", "해외여행보험", null, LocalDate.of(2026, 1, 1)));
+    failed.linkTerms(PolicyTerms.official("삼성화재", "해외여행보험", null, LocalDate.of(2026, 1, 1)), "EXACT", null);
     failed.markFailed("두 번째 시도 실패", LocalDateTime.now());
     given(analysisResultRepository.findOneByDocumentIdForUpdate(documentId)).willReturn(Optional.of(failed));
 

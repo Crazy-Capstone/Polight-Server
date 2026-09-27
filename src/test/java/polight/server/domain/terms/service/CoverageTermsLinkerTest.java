@@ -322,7 +322,7 @@ class CoverageTermsLinkerTest {
     ReflectionTestUtils.setField(result, "id", UUID.randomUUID());
     result.completeWith(
         null, "{}", null, null, null, false, "삼성화재", "해외여행보험", null, null, LocalDateTime.now());
-    result.linkTerms(matched);
+    result.linkTerms(matched, "EXACT", null);
     return result;
   }
 

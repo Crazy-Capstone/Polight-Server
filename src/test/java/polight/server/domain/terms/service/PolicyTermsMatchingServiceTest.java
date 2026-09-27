@@ -30,7 +30,7 @@ class PolicyTermsMatchingServiceTest {
   void 찾으면_분석에_연결한다() {
     PolicyTerms terms = terms();
     given(termsMatcher.match(any()))
-        .willReturn(TermsMatch.found(TermsMatchStage.EXACT, terms, "일치"));
+        .willReturn(TermsMatch.found(TermsMatchStage.EXACT, terms, "일치", null));
     AnalysisResult analysis = analysis();
 
     service().matchAndLink(analysis);
@@ -39,15 +39,31 @@ class PolicyTermsMatchingServiceTest {
   }
 
   @Test
+  void 단계와_사용자_안내를_함께_남긴다() {
+    // 셋은 한 번의 판단에서 나온 값이다. 따로 넣게 두면 약관만 바뀌고 안내는 이전 것이 남는다.
+    given(termsMatcher.match(any()))
+        .willReturn(
+            TermsMatch.found(TermsMatchStage.INSURER, terms(), "상품명 불일치", "정확히 찾지 못했어요."));
+    AnalysisResult analysis = analysis();
+
+    service().matchAndLink(analysis);
+
+    assertThat(analysis.getTermsMatchStage()).isEqualTo("INSURER");
+    assertThat(analysis.getTermsMatchNotice()).isEqualTo("정확히 찾지 못했어요.");
+  }
+
+  @Test
   void 못_찾으면_이전_연결을_끊는다() {
     // 재분석이 다른 이름을 읽었는데 이전 연결이 남아 있으면 다른 상품의 약관을 가리키게 된다.
     given(termsMatcher.match(any())).willReturn(TermsMatch.none("등록된 약관이 없습니다."));
     AnalysisResult analysis = analysis();
-    analysis.linkTerms(terms());
+    analysis.linkTerms(terms(), "EXACT", null);
 
     service().matchAndLink(analysis);
 
     assertThat(analysis.getMatchedTerms()).isNull();
+    // 약관이 없다는 사실도 사용자에게 알려야 한다. 그래야 증권에 적힌 내용만 보고 있다는 것을 안다.
+    assertThat(analysis.getTermsMatchNotice()).isNotBlank();
   }
 
   @Test
@@ -57,7 +73,7 @@ class PolicyTermsMatchingServiceTest {
     PolicyTerms previous = terms();
     given(termsMatcher.match(any())).willThrow(new IllegalStateException("AI 서버 응답 없음"));
     AnalysisResult analysis = analysis();
-    analysis.linkTerms(previous);
+    analysis.linkTerms(previous, "EXACT", null);
 
     assertThatThrownBy(() -> service().matchAndLink(analysis))
         .isInstanceOf(IllegalStateException.class);

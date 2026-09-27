@@ -86,8 +86,12 @@ public class LocalTermsMatcher implements TermsMatcher {
                 .toList());
 
     if (productMatches.size() == 1) {
+      PolicyTerms only = productMatches.get(0);
       return TermsMatch.found(
-          TermsMatchStage.EXACT, productMatches.get(0), "보험사·상품명이 일치하는 약관이 하나입니다.");
+          TermsMatchStage.EXACT,
+          only,
+          "보험사·상품명이 일치하는 약관이 하나입니다.",
+          TermsMatchNotice.of(TermsMatchStage.EXACT, only));
     }
     if (productMatches.size() > 1) {
       return selectRevision(productMatches, referenceDate(analysisResult, document));
@@ -119,7 +123,10 @@ public class LocalTermsMatcher implements TermsMatcher {
       // 개정판을 고르되, 추측이라는 사실을 근거 문구에 남긴다.
       PolicyTerms latest = latestOf(dated);
       return TermsMatch.found(
-          TermsMatchStage.REVISION, latest, "기준일을 알 수 없어 최신 개정판(" + latest.getEffectiveDate() + ")을 골랐습니다.");
+          TermsMatchStage.REVISION,
+          latest,
+          "기준일을 알 수 없어 최신 개정판(" + latest.getEffectiveDate() + ")을 골랐습니다.",
+          TermsMatchNotice.of(TermsMatchStage.REVISION, latest));
     }
 
     List<PolicyTerms> applicable =
@@ -136,7 +143,8 @@ public class LocalTermsMatcher implements TermsMatcher {
     return TermsMatch.found(
         TermsMatchStage.REVISION,
         selected,
-        "기준일 " + referenceDate + " 에 유효했던 개정판(" + selected.getEffectiveDate() + ")을 골랐습니다.");
+        "기준일 " + referenceDate + " 에 유효했던 개정판(" + selected.getEffectiveDate() + ")을 골랐습니다.",
+        TermsMatchNotice.of(TermsMatchStage.REVISION, selected));
   }
 
   /**
@@ -154,7 +162,8 @@ public class LocalTermsMatcher implements TermsMatcher {
       return TermsMatch.found(
           TermsMatchStage.INSURER,
           only,
-          "상품명('" + productName + "')은 맞지 않지만 '" + insurerName + "' 약관이 '" + only.getProductName() + "' 하나뿐입니다.");
+          "상품명('" + productName + "')은 맞지 않지만 '" + insurerName + "' 약관이 '" + only.getProductName() + "' 하나뿐입니다.",
+          TermsMatchNotice.of(TermsMatchStage.INSURER, only));
     }
 
     return TermsMatch.none(

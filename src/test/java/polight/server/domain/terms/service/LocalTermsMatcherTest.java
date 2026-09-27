@@ -63,6 +63,36 @@ class LocalTermsMatcherTest {
     assertThat(match.stage()).isEqualTo(TermsMatchStage.EXACT);
   }
 
+  @Test
+  void 확실하게_찾으면_안내를_띄우지_않는다() {
+    givenUsableTerms(verified("삼성화재", "해외여행보험", null, null));
+
+    // 매번 무언가 뜨면 정작 경고가 필요할 때 눈에 띄지 않는다.
+    assertThat(matcher.match(certificateAnalysis("삼성화재", "해외여행보험", null)).notice()).isNull();
+  }
+
+  @Test
+  void 개정판을_골랐으면_그_날짜를_알린다() {
+    givenUsableTerms(
+        verified("삼성화재", "해외여행보험", "2026-01", LocalDate.of(2026, 1, 1)),
+        verified("삼성화재", "해외여행보험", "2026-06", LocalDate.of(2026, 6, 6)));
+    AnalysisResult analysis =
+        analysis(DocumentKind.CERTIFICATE, "삼성화재", "해외여행보험", null, LocalDate.of(2026, 7, 30));
+
+    // 사용자가 자기 증권의 약관 날짜와 대조할 수 있는 유일한 단서다.
+    assertThat(matcher.match(analysis).notice()).contains("2026-06-06");
+  }
+
+  @Test
+  void 보험사_약관으로_대신했으면_어느_약관인지_밝힌다() {
+    givenUsableTerms(verified("삼성화재", "해외여행보험", null, null));
+
+    // 어느 약관을 대신 썼는지 밝혀야 사용자가 자기 상품과 다르다는 것을 알아차린다.
+    String notice = matcher.match(certificateAnalysis("삼성화재", "유학생보험", null)).notice();
+
+    assertThat(notice).contains("삼성화재").contains("해외여행보험");
+  }
+
   // -------------------------------------------------------------------------
   // REVISION
   // -------------------------------------------------------------------------

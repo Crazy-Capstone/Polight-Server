@@ -16,11 +16,14 @@ import polight.server.domain.analysis.entity.CoverageStatus;
  *     "미보장"으로 보이는 것을 막기 위해 판정 결과를 아예 내려주지 않는다
  * @param coveragesComplete 담보 목록이 증권 보장내용 표 전체인지. {@code false}면 목록에 없는 담보를 "미가입"으로 단정할 수 없다.
  *     현재는 항상 {@code false}다
+ * @param termsNotice 이 분석이 어느 약관을 근거로 삼았는지 알릴 문구. 확실하게 맞았으면 {@code null}이라 화면에 아무것도
+ *     띄우지 않으면 된다. 값이 있으면 근거가 확실하지 않다는 뜻이므로 담보 목록 위에 함께 보여 준다
  */
 public record CoverageAnalysisResponse(
     UUID analysisResultId,
     AnalysisStatus status,
     boolean coveragesComplete,
+    String termsNotice,
     List<SelectedConcernResponse> selectedConcerns,
     List<CoverageItemResponse> coverages) {
 

@@ -83,6 +83,24 @@ public class AnalysisResult extends BaseTimeEntity {
   @JoinColumn(name = "matched_terms_id")
   private PolicyTerms matchedTerms;
 
+  /**
+   * 위 약관을 어느 단계에서 찾았는지. AI 서버 {@code /internal/terms/match} 의 {@code level} 과 같은 어휘다.
+   *
+   * <p>enum 이 아니라 문자열이다. 어휘의 정본이 AI 쪽에 있어, 그쪽이 단계를 하나 늘릴 때마다 백엔드를 같이 배포해야
+   * 값이 저장되는 상황을 만들지 않는다.
+   */
+  @Column(name = "terms_match_stage", length = 30)
+  private String termsMatchStage;
+
+  /**
+   * 그 연결이 확실하지 않을 때 사용자에게 보여줄 안내. 깔끔하게 맞았으면 {@code null} 이다.
+   *
+   * <p>로그용 근거({@code TermsMatch.reason})와 다르다. 그쪽은 개발자가 읽는 문장이라 "상품명('...')은 맞지 않지만"
+   * 같은 식으로 적혀 있다. 이 값은 사용자가 읽는다.
+   */
+  @Column(name = "terms_match_notice", columnDefinition = "TEXT")
+  private String termsMatchNotice;
+
   @Column(columnDefinition = "TEXT")
   private String summary;
 
@@ -184,9 +202,14 @@ public class AnalysisResult extends BaseTimeEntity {
    * 찾아낸 약관을 연결한다.
    *
    * <p>{@code null}을 넣어 연결을 끊을 수 있다. 재분석으로 보험사/상품명이 달라지면 이전 약관 연결은 더 이상 근거가 아니다.
+   *
+   * <p>어떻게 찾았는지({@code stage})와 사용자에게 알릴 문구({@code notice})를 함께 받는다. 셋은 한 번의 판단에서 나온
+   * 값이라 따로 넣게 두면 약관만 바뀌고 안내는 이전 것이 남는 상태가 만들어진다.
    */
-  public void linkTerms(PolicyTerms terms) {
+  public void linkTerms(PolicyTerms terms, String stage, String notice) {
     this.matchedTerms = terms;
+    this.termsMatchStage = stage;
+    this.termsMatchNotice = notice;
   }
 
   public boolean hasMatchedTerms() {
@@ -233,6 +256,8 @@ public class AnalysisResult extends BaseTimeEntity {
     this.insuranceStartDate = null;
     this.insuranceEndDate = null;
     this.matchedTerms = null;
+    this.termsMatchStage = null;
+    this.termsMatchNotice = null;
   }
 
   @PrePersist

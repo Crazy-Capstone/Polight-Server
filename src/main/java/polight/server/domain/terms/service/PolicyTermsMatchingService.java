@@ -36,7 +36,9 @@ public class PolicyTermsMatchingService {
   @Transactional
   public TermsMatch matchAndLink(AnalysisResult analysisResult) {
     TermsMatch match = termsMatcher.match(analysisResult);
-    analysisResult.linkTerms(match.terms());
+    // 단계는 이름 그대로 저장한다. AI 가 어휘를 늘려도 마이그레이션 없이 값이 남게 하기 위해
+    // 컬럼이 문자열이다.
+    analysisResult.linkTerms(match.terms(), match.stage().name(), match.notice());
 
     if (match.isMatched()) {
       log.info(

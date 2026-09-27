@@ -61,14 +61,18 @@ public class AiTermsMatcher implements TermsMatcher {
 
     if (response.termsId() == null) {
       return TermsMatch.none(
-          "AI 서버가 맞는 약관을 찾지 못했습니다" + (response.notice() == null ? "." : ": " + response.notice()));
+          "AI 서버가 맞는 약관을 찾지 못했습니다" + (response.notice() == null ? "." : ": " + response.notice()),
+          response.notice());
     }
 
     // 존재를 확인하지 않고 참조만 얻는다. 어느 약관인가는 AI 가 판단하기로 한 것이라 여기서
     // 다시 따지지 않는다. 없는 id 라면 커밋 시점에 FK 가 걸러내고, 그 실패는 연결 트랜잭션에만
     // 머문다(분석 결과는 이미 커밋되어 있다).
     PolicyTerms terms = policyTermsRepository.getReferenceById(response.termsId());
-    return TermsMatch.found(TermsMatchStage.valueOf(response.level()), terms, describe(response));
+    // 안내 문구도 AI 가 보낸 것을 그대로 쓴다. 어떤 근거로 골랐는지 아는 쪽이 쓰는 것이 맞고,
+    // 우리가 다시 지어내면 같은 연결에 두 가지 설명이 생긴다.
+    return TermsMatch.found(
+        TermsMatchStage.valueOf(response.level()), terms, describe(response), response.notice());
   }
 
   private String describe(TermsMatchResponse response) {
