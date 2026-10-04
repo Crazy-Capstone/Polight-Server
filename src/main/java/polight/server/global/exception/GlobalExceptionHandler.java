@@ -5,11 +5,13 @@ import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /** 모든 예외를 {@link ErrorResponse} 하나의 형식으로 변환한다. */
 @Slf4j
@@ -70,6 +72,36 @@ public class GlobalExceptionHandler {
   public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e) {
     return ResponseEntity.status(ErrorCode.POLICY_DOCUMENT_TOO_LARGE.getStatus())
         .body(ErrorResponse.of(ErrorCode.POLICY_DOCUMENT_TOO_LARGE));
+  }
+
+  /**
+   * 처리할 핸들러도 정적 파일도 없는 경로.
+   *
+   * <p>이 핸들러가 없으면 맨 아래 {@code Exception} 핸들러가 받아 500이 된다. 없는 주소를 부른 것은 보낸 쪽의 문제이므로 404가 맞고,
+   * 500으로 돌려주면 프론트는 서버가 고장난 것으로 읽어 재시도하거나 장애로 보고한다.
+   *
+   * <p>로그를 남기지 않는 이유: 봇과 브라우저가 {@code /}, {@code /favicon.ico}, {@code /robots.txt} 를 끊임없이 긁는다.
+   * 그때마다 스택트레이스가 ERROR 로 쌓이면 진짜 서버 오류가 그 사이에 묻힌다.
+   */
+  @ExceptionHandler(NoResourceFoundException.class)
+  public ResponseEntity<ErrorResponse> handleNoResourceFound(NoResourceFoundException e) {
+    return ResponseEntity.status(ErrorCode.ENDPOINT_NOT_FOUND.getStatus())
+        .body(ErrorResponse.of(ErrorCode.ENDPOINT_NOT_FOUND));
+  }
+
+  /**
+   * 경로는 있으나 메서드가 다른 경우(예: GET 전용 경로에 POST).
+   *
+   * <p>위와 같은 이유로 따로 받는다. 405는 "주소는 맞았고 방식이 틀렸다"를 알려주므로, 프론트가 500을 보고 서버를 의심하는 대신 자기 요청을
+   * 바로 고칠 수 있다.
+   */
+  @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+  public ResponseEntity<ErrorResponse> handleMethodNotSupported(
+      HttpRequestMethodNotSupportedException e) {
+    log.warn("지원하지 않는 메서드: {}", e.getMessage());
+
+    return ResponseEntity.status(ErrorCode.METHOD_NOT_ALLOWED.getStatus())
+        .body(ErrorResponse.of(ErrorCode.METHOD_NOT_ALLOWED));
   }
 
   /**
