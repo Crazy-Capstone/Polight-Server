@@ -41,6 +41,10 @@ const NO_TERMS_ANSWER =
 
 // AI 를 실제로 태운 질의의 지연. 이것만이 측정 대상이다.
 const aiLatency = new Trend('ai_latency', true);
+// AI 를 태워 답을 받은 횟수. 처리량(= 이 값 / 측정 시간)이 직렬 여부를 가르는 핵심 지표라
+// 직접 센다. k6 의 http_reqs 에는 대조군이 섞여 있어 빼기를 해야 하고, 대조군이 설정한
+// 속도를 못 채우면 그 빼기가 틀어진다.
+const aiRequests = new Counter('ai_requests');
 // AI 를 안 탄 응답. 0 이 아니면 테스트 대상 여행에 약관이 안 붙은 것이라 측정 자체가 무의미하다.
 const noTermsCount = new Counter('ai_skipped_no_terms');
 const aiTimeouts = new Counter('ai_timeouts');
@@ -154,6 +158,10 @@ export function askQuestion(data) {
     noTermsCount.add(1);
     return;
   }
+
+  // 처리량은 워밍업 포함 전부 센다. "이 시간에 몇 건을 처리했는가"가 질문이므로
+  // 앞 몇 건을 빼면 분모와 분자가 어긋난다.
+  aiRequests.add(1);
 
   if (__ITER >= WARMUP_ITERATIONS) {
     aiLatency.add(res.timings.duration);
