@@ -45,6 +45,12 @@ const aiLatency = new Trend('ai_latency', true);
 // 직접 센다. k6 의 http_reqs 에는 대조군이 섞여 있어 빼기를 해야 하고, 대조군이 설정한
 // 속도를 못 채우면 그 빼기가 틀어진다.
 const aiRequests = new Counter('ai_requests');
+// 워밍업을 포함한 전체 지연.
+//
+// ai_latency 는 앞 몇 건을 버리는데, 포화 구간에서는 성공 자체가 드물어 그 몇 건이 전부일 수
+// 있다. 실제로 VU=4 측정에서 성공 6건이 전원 워밍업 구간에 들어가 ai_latency 가 통째로
+// 비었다. 버리지 않은 값도 같이 남겨 그런 구간에서도 읽을 것이 있게 한다.
+const aiLatencyAll = new Trend('ai_latency_all', true);
 // AI 를 안 탄 응답. 0 이 아니면 테스트 대상 여행에 약관이 안 붙은 것이라 측정 자체가 무의미하다.
 const noTermsCount = new Counter('ai_skipped_no_terms');
 const aiTimeouts = new Counter('ai_timeouts');
@@ -162,6 +168,7 @@ export function askQuestion(data) {
   // 처리량은 워밍업 포함 전부 센다. "이 시간에 몇 건을 처리했는가"가 질문이므로
   // 앞 몇 건을 빼면 분모와 분자가 어긋난다.
   aiRequests.add(1);
+  aiLatencyAll.add(res.timings.duration);
 
   if (__ITER >= WARMUP_ITERATIONS) {
     aiLatency.add(res.timings.duration);
