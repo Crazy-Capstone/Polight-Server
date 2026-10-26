@@ -13,12 +13,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+import polight.server.domain.user.repository.UserRepository;
 
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   private final JwtTokenProvider jwtTokenProvider;
+  private final UserRepository userRepository;
 
   @Override
   protected void doFilterInternal(
@@ -30,9 +32,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       String accessToken = bearerToken.substring(7);
       try {
         UUID userId = jwtTokenProvider.parseUserId(accessToken);
-        UsernamePasswordAuthenticationToken authentication =
-            new UsernamePasswordAuthenticationToken(userId, null, Collections.emptyList());
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+        if (userRepository.existsById(userId)) {
+          UsernamePasswordAuthenticationToken authentication =
+              new UsernamePasswordAuthenticationToken(userId, null, Collections.emptyList());
+          SecurityContextHolder.getContext().setAuthentication(authentication);
+        } else {
+          SecurityContextHolder.clearContext();
+        }
       } catch (Exception ignored) {
         SecurityContextHolder.clearContext();
       }

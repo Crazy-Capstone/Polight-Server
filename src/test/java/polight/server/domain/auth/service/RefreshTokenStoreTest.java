@@ -20,6 +20,8 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import polight.server.global.exception.BaseException;
 import polight.server.global.exception.ErrorCode;
 
@@ -130,5 +132,25 @@ class RefreshTokenStoreTest {
     store.revoke("");
 
     verify(redisTemplate, org.mockito.Mockito.never()).delete(anyString());
+  }
+
+  @Test
+  void revokeAll_deletesOnlyTargetUsersTokensAndClosesCursor() {
+    UUID userId = UUID.randomUUID();
+    @SuppressWarnings("unchecked")
+    Cursor<String> cursor = org.mockito.Mockito.mock(Cursor.class);
+    given(redisTemplate.scan(any(ScanOptions.class))).willReturn(cursor);
+    given(cursor.hasNext()).willReturn(true, true, true, false);
+    given(cursor.next()).willReturn("auth:refresh:mine", "auth:refresh:other", "auth:refresh:expired");
+    given(valueOperations.get("auth:refresh:mine")).willReturn(userId.toString());
+    given(valueOperations.get("auth:refresh:other")).willReturn(UUID.randomUUID().toString());
+    given(valueOperations.get("auth:refresh:expired")).willReturn(null);
+
+    store.revokeAll(userId);
+
+    verify(redisTemplate).delete("auth:refresh:mine");
+    verify(redisTemplate, org.mockito.Mockito.never()).delete("auth:refresh:other");
+    verify(redisTemplate, org.mockito.Mockito.never()).delete("auth:refresh:expired");
+    verify(cursor).close();
   }
 }
