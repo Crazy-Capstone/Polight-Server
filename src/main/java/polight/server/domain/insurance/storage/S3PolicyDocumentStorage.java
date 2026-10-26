@@ -12,6 +12,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 
 @Component
 @ConditionalOnProperty(name = "storage.type", havingValue = "s3")
@@ -51,5 +52,13 @@ public class S3PolicyDocumentStorage implements PolicyDocumentStorage {
     }
 
     return key;
+  }
+
+  @Override
+  public void delete(String storedFilePath) {
+    if (!storedFilePath.startsWith(keyPrefix) || storedFilePath.equals(keyPrefix)) {
+      throw new IllegalArgumentException("Object is outside the policy document prefix");
+    }
+    s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(storedFilePath).build());
   }
 }

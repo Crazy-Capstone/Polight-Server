@@ -18,11 +18,28 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 
 @ExtendWith(MockitoExtension.class)
 class S3PolicyDocumentStorageTest {
 
   @Mock private S3Client s3Client;
+
+  @Test
+  void delete_removesObjectFromConfiguredBucket() {
+    var storage = new S3PolicyDocumentStorage(s3Client, "bucket", "policy-documents");
+    storage.delete("policy-documents/file");
+    var request = ArgumentCaptor.forClass(DeleteObjectRequest.class);
+    verify(s3Client).deleteObject(request.capture());
+    assertThat(request.getValue().bucket()).isEqualTo("bucket");
+    assertThat(request.getValue().key()).isEqualTo("policy-documents/file");
+  }
+
+  @Test
+  void delete_rejectsObjectsOutsideConfiguredPrefix() {
+    var storage = new S3PolicyDocumentStorage(s3Client, "bucket", "policy-documents");
+    assertThatThrownBy(() -> storage.delete("other/file")).isInstanceOf(IllegalArgumentException.class);
+  }
 
   @Test
   void store_putsObjectUnderKeyPrefixAndReturnsTheKey() {
