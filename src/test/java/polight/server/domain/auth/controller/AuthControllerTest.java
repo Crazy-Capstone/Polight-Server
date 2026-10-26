@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import polight.server.domain.auth.dto.AuthTokenResponse;
 import polight.server.domain.auth.service.AuthService;
+import polight.server.domain.user.repository.UserRepository;
 import polight.server.global.exception.BaseException;
 import polight.server.global.exception.ErrorCode;
 import polight.server.global.security.JwtTokenProvider;
@@ -31,6 +32,8 @@ class AuthControllerTest {
   @MockBean private AuthService authService;
 
   @MockBean private JwtTokenProvider jwtTokenProvider;
+
+  @MockBean private UserRepository userRepository;
 
   @Test
   void kakaoLogin_acceptsAuthorizationCodeOnly() throws Exception {

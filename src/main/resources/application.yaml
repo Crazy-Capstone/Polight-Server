@@ -69,8 +69,9 @@ spring:
 
 security:
   jwt:
-    # security.jwt.secret 은 여기에 정의하지 않습니다.
-    # SECURITY_JWT_SECRET 환경변수(.env / 배포 환경)로 주입해야 하며, 없으면 기동에 실패합니다.
+    # .env 는 properties 로 읽으므로 대문자 키도 명시적으로 연결한다.
+    # 기본값 없이 환경변수 또는 .env 로 주입하며, 없으면 기동에 실패한다.
+    secret: ${SECURITY_JWT_SECRET}
     access-token-expiry-seconds: ${SECURITY_JWT_ACCESS_TOKEN_EXPIRY_SECONDS:3600}
 
   refresh-token:

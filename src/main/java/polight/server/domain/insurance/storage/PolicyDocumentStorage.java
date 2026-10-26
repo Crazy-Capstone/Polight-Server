@@ -14,4 +14,7 @@ public interface PolicyDocumentStorage {
    * PolicyDocument.storedFilePath} 에 그대로 저장된다 (로컬은 절대 경로, S3 는 오브젝트 키).
    */
   String store(MultipartFile file);
+
+  /** Delete a stored file. An already absent file is considered deleted. */
+  void delete(String storedFilePath);
 }

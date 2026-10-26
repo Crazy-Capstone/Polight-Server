@@ -71,8 +71,7 @@ public class AuthService {
    * 로그아웃. 리프레시 토큰만 무효화한다.
    *
    * <p>이미 발급된 access token 은 서명이 유효한 동안(최대 {@code access-token-expiry-seconds}) 계속 통한다. 그것을
-   * 막으려면 요청마다 저장소를 확인해야 하고, 그러면 access token 이 무상태가 아니게 된다. 만료가 1시간이라 그 대가를 치를 이유가 없다고 보고
-   * 두었다 -- 즉시 차단이 필요해지면 그때 블랙리스트를 붙인다.
+   * 로그아웃만으로 차단하지는 않는다. 단, 회원 탈퇴 시에는 JWT 필터가 회원의 존재 여부를 확인하므로 남은 access token 으로도 접근할 수 없다.
    */
   public void logout(String refreshToken) {
     refreshTokenStore.revoke(refreshToken);

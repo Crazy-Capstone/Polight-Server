@@ -36,4 +36,17 @@ public class LocalPolicyDocumentStorage implements PolicyDocumentStorage {
 
     return target.toString();
   }
+
+  @Override
+  public void delete(String storedFilePath) {
+    Path target = Path.of(storedFilePath).toAbsolutePath().normalize();
+    if (!target.startsWith(directory) || target.equals(directory)) {
+      throw new IllegalArgumentException("File is outside the policy document directory");
+    }
+    try {
+      Files.deleteIfExists(target);
+    } catch (IOException exception) {
+      throw new IllegalStateException("Could not delete policy document", exception);
+    }
+  }
 }

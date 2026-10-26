@@ -1,6 +1,7 @@
 package polight.server.domain.insurance.storage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -44,5 +45,21 @@ class LocalPolicyDocumentStorageTest {
     String storedFilePath = storage.store(new MockMultipartFile("file", "x.pdf", null, "x".getBytes()));
 
     assertThat(Files.exists(Path.of(storedFilePath))).isTrue();
+  }
+
+  @Test
+  void delete_removesStoredFileAndAllowsRepeatedDeletion() {
+    var storage = new LocalPolicyDocumentStorage(tempDir.toString());
+    String path = storage.store(new MockMultipartFile("file", "x.pdf", null, "x".getBytes()));
+    storage.delete(path);
+    storage.delete(path);
+    assertThat(Path.of(path)).doesNotExist();
+  }
+
+  @Test
+  void delete_rejectsPathsOutsideStorageDirectory() {
+    var storage = new LocalPolicyDocumentStorage(tempDir.resolve("documents").toString());
+    assertThatThrownBy(() -> storage.delete(tempDir.resolve("other-file").toString()))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 }

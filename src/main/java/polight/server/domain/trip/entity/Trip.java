@@ -62,7 +62,7 @@ public class Trip extends BaseTimeEntity {
    */
   @Enumerated(EnumType.STRING)
   @JdbcTypeCode(SqlTypes.ARRAY)
-  @Column(name = "concerns", nullable = false, columnDefinition = "varchar(50)[]")
+  @Column(name = "concerns", nullable = false, columnDefinition = "varchar(50) ARRAY")
   private List<Concern> concerns = new ArrayList<>();
 
   @Builder

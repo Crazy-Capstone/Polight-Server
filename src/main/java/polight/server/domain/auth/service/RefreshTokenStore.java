@@ -11,6 +11,7 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Component;
 import polight.server.global.exception.BaseException;
 import polight.server.global.exception.ErrorCode;
@@ -18,7 +19,7 @@ import polight.server.global.exception.ErrorCode;
 /**
  * 리프레시 토큰 저장소. Redis 에 둔다.
  *
- * <p>access token 은 서명만 검증하면 되어 서버가 아무것도 기억하지 않지만(STATELESS), 리프레시 토큰은 그럴 수 없다. 로그아웃과 재발급 회전이
+ * <p>access token 은 서명과 회원 존재 여부를 검증하지만, 리프레시 토큰은 별도로 보관한다. 로그아웃과 재발급 회전이
  * "이 토큰은 이제 못 쓴다"를 서버가 기억해야 성립하기 때문이다. 그 기억을 JWT 안에 넣을 방법은 없다 -- 이미 발급된 서명을 취소할 수 없다.
  *
  * <p>DB 가 아니라 Redis 인 이유는 두 가지다. 만료된 토큰을 지우는 일을 TTL 이 대신해 정리 배치가 필요 없고, 이 값들은 잃어도 사용자가 다시
@@ -109,6 +110,19 @@ public class RefreshTokenStore {
       return;
     }
     redisTemplate.delete(key(token));
+  }
+
+  /** Existing tokens have no user index, so scan in bounded batches, never with KEYS. */
+  public void revokeAll(UUID userId) {
+    ScanOptions options = ScanOptions.scanOptions().match(KEY_PREFIX + "*").count(500).build();
+    try (var keys = redisTemplate.scan(options)) {
+      while (keys.hasNext()) {
+        String key = keys.next();
+        if (userId.toString().equals(redisTemplate.opsForValue().get(key))) {
+          redisTemplate.delete(key);
+        }
+      }
+    }
   }
 
   public long getExpirySeconds() {
