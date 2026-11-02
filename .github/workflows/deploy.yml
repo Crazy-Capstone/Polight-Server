@@ -1,3 +1,67 @@
+name: Build and Deploy to EC2 (New AWS)
+
+# Start with manual-only deployment while validating the new AWS infrastructure.
+# Enable push-to-main only after the first successful production smoke test.
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-northeast-2
+  AWS_ROLE_ARN: arn:aws:iam::767918718624:role/polight-github-actions-deploy-role
+  ECR_REPOSITORY: polight/backend
+  ECR_REGISTRY: 767918718624.dkr.ecr.ap-northeast-2.amazonaws.com
+  EC2_INSTANCE_ID: i-06f4bae54906cbd4d
+  DEPLOY_DIR: /home/ec2-user/polight
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          provenance: false
+          platforms: linux/amd64
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy via SSM (existing EC2 compose and env)
+        env:
+          IMAGE_URI: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+
+          image = os.environ["IMAGE_URI"]
+          registry = os.environ["ECR_REGISTRY"]
+          region = os.environ["AWS_REGION"]
+          directory = os.environ["DEPLOY_DIR"]
           compose = "docker compose --env-file .env -f docker-compose.rds.yml"
 
           # SSM AWS-RunShellScript runs these commands as root.
@@ -50,4 +114,3 @@
             --query '{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}'
 
           test "$STATUS" = Success
-          
