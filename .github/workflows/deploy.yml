@@ -3,6 +3,9 @@ name: Build and Deploy to EC2 (New AWS)
 # Start with manual-only deployment while validating the new AWS infrastructure.
 # Enable push-to-main only after the first successful production smoke test.
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 env:
