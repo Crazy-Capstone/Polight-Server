@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import polight.server.domain.concern.entity.Concern;
 import polight.server.domain.trip.dto.TripCreateRequest;
 import polight.server.domain.trip.entity.Trip;
 import polight.server.domain.trip.mapper.TripMapper;
@@ -62,6 +63,24 @@ class TripCountriesTest {
     assertThat(trip.getEndDate()).isEqualTo(END);
     assertThat(trip.getCountries()).containsExactly("JP", "KR");
     assertThat(trip.getConcerns()).isEmpty();
+  }
+
+  @Test
+  void mapperReturnsCountriesInSelectionOrder() {
+    Trip trip = Trip.builder().name("Trip").startDate(START).endDate(END)
+        .countries(List.of("FR", "JP", "KR")).concerns(List.of(Concern.FLIGHT_DELAY)).build();
+    var response = new TripMapper().toResponse(trip);
+    assertThat(response.countries()).containsExactly("FR", "JP", "KR");
+    assertThat(response.name()).isEqualTo("Trip");
+    assertThat(response.startDate()).isEqualTo(START);
+    assertThat(response.endDate()).isEqualTo(END);
+    assertThat(response.concerns()).containsExactly(Concern.FLIGHT_DELAY);
+  }
+
+  @Test
+  void mapperReturnsEmptyArrayForTripWithoutCountries() {
+    var response = new TripMapper().toResponse(Trip.builder().build());
+    assertThat(response.countries()).isEmpty();
   }
 
   @Test

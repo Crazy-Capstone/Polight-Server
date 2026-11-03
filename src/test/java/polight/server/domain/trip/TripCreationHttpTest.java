@@ -107,6 +107,7 @@ class TripCreationHttpTest {
     UUID analysisId = UUID.fromString(body.path("analysis").path("id").asText());
     var stored = trips.findById(tripId).orElseThrow();
     assertThat(stored.getCountries()).containsExactlyElementsOf(expectedCountries);
+    assertThat(body.path("trip").path("countries")).isEqualTo(mapper.valueToTree(expectedCountries));
     assertThat(stored.getName()).isEqualTo("Trip");
     assertThat(stored.getConcerns()).isEmpty();
     assertThat(body.path("trip").path("startDate").asText()).isEqualTo("2026-11-10");

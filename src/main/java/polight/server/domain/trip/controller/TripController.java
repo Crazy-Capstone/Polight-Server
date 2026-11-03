@@ -75,14 +75,16 @@ public class TripController {
   }
 
   @GetMapping
-  @Operation(summary = "내 여행 세션 목록")
+  @Operation(summary = "내 여행 세션 목록",
+      description = "본인의 여행 이름, 시작일, 종료일과 countries 국가코드 목록을 반환합니다. 국가 정보가 없는 여행은 countries가 빈 배열입니다.")
   public List<TripResponse> getTrips(@AuthenticationPrincipal UUID userId) {
     return tripService.getTrips(userId);
   }
 
 
   @GetMapping("/{tripId}")
-  @Operation(summary = "여행 세션 조회")
+  @Operation(summary = "여행 세션 조회",
+      description = "본인 여행의 이름, 시작일, 종료일과 countries 국가코드 목록을 반환합니다. 국가 정보가 없으면 빈 배열이며, 존재하지 않거나 타인 소유인 여행은 404 TRIP_NOT_FOUND를 반환합니다.")
   public TripResponse getTrip(@AuthenticationPrincipal UUID userId, @PathVariable UUID tripId) {
     return tripService.getTrip(userId, tripId);
   }

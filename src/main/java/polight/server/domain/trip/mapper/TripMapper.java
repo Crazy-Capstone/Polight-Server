@@ -37,7 +37,8 @@ public class TripMapper {
         trip.getStatus(),
         trip.getConcerns(),
         trip.getCreatedAt(),
-        trip.getUpdatedAt());
+        trip.getUpdatedAt(),
+        trip.getCountries());
   }
 
   public List<TripResponse> toResponses(List<Trip> trips) {
