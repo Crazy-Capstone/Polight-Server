@@ -18,17 +18,7 @@ import polight.server.domain.analysis.service.AnalysisCallbackService;
 import polight.server.global.exception.BaseException;
 import polight.server.global.exception.ErrorCode;
 
-/**
- * AI 서버가 분석 결과를 알려주는 콜백 수신부.
- *
- * <p>인증은 {@code InternalApiKeyFilter}가 {@code X-Internal-Api-Key} 헤더로 처리한다. 사용자 토큰이 오지 않는 구간이다.
- *
- * <p>본문을 {@link JsonNode}로 먼저 받는다. 타입 변환은 그 다음에 하고, <b>받은 본문 원문을 그대로 보관</b>하기 위해서다. DTO로 바로 받으면
- * DTO에 없는 필드가 사라지는데, 지금 콜백에는 저장할 컬럼이 아직 없는 값(보험사명·상품명)이 실려 오고 앞으로도 필드가 추가된다.
- *
- * <p>{@link Hidden}으로 공개 API 문서에서 제외한다. {@code /v3/api-docs}는 인증 없이 열려 있어 프론트엔드가 보는 문서인데, 서버 간 계약이
- * 거기 섞이면 혼란만 준다.
- */
+
 @Slf4j
 @Hidden
 @RestController
