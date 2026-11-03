@@ -55,6 +55,10 @@ public class Trip extends BaseTimeEntity {
   @Column(nullable = false, length = 20)
   private TripStatus status = TripStatus.PLANNED;
 
+  @JdbcTypeCode(SqlTypes.ARRAY)
+  @Column(name = "countries", nullable = false, columnDefinition = "varchar(2) ARRAY")
+  private List<String> countries = new ArrayList<>();
+
   /**
    * 사용자가 고른 걱정되는 상황. 보장 내역을 보여줄 때 선택한 항목에 해당하는 담보를 위로 올리는 데 쓴다.
    *
@@ -72,13 +76,15 @@ public class Trip extends BaseTimeEntity {
       LocalDate startDate,
       LocalDate endDate,
       TripStatus status,
-      Collection<Concern> concerns) {
+      Collection<Concern> concerns,
+      Collection<String> countries) {
     this.user = user;
     this.name = name;
     this.startDate = startDate;
     this.endDate = endDate;
     this.status = status == null ? TripStatus.PLANNED : status;
     this.concerns = normalizeConcerns(concerns);
+    this.countries = countries == null ? new ArrayList<>() : new ArrayList<>(new LinkedHashSet<>(countries));
   }
 
   public void update(String name, LocalDate startDate, LocalDate endDate) {

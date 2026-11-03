@@ -23,6 +23,7 @@ public class TripMapper {
         .name(request.name().trim())
         .startDate(request.startDate())
         .endDate(request.endDate())
+        .countries(request.countriesOrEmpty())
         .concerns(request.concernsOrEmpty())
         .build();
   }

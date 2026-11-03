@@ -1,5 +1,6 @@
 package polight.server.domain.trip.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -7,6 +8,7 @@ import java.time.LocalDate;
 import java.util.List;
 import polight.server.domain.concern.entity.Concern;
 import polight.server.domain.insurance.entity.DocumentKind;
+import polight.server.domain.trip.validation.CountryCode;
 
 /**
  * 여행 등록 요청.
@@ -23,7 +25,15 @@ public record TripCreateRequest(
     @NotNull(message = "여행 시작일은 필수입니다.") LocalDate startDate,
     @NotNull(message = "여행 종료일은 필수입니다.") LocalDate endDate,
     List<Concern> concerns,
-    DocumentKind documentKind) {
+    DocumentKind documentKind,
+    @Schema(
+        description = "ISO 3166-1 alpha-2 대문자 국가코드 목록. 중복은 제거하며 선택 순서를 유지합니다. 생략하거나 null이면 빈 목록으로 저장합니다.",
+        example = "[\"JP\",\"KR\"]")
+    List<@CountryCode String> countries) {
+
+  public List<String> countriesOrEmpty() {
+    return countries == null ? List.of() : countries;
+  }
 
   public List<Concern> concernsOrEmpty() {
     return concerns == null ? List.of() : concerns;

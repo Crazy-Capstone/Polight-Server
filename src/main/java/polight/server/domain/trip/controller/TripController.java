@@ -52,6 +52,7 @@ public class TripController {
           multipart 파트 구성:
           - `trip` : 여행 정보 JSON. 이 파트의 Content-Type을 `application/json` 으로 지정해야 합니다.
             파일 종류는 이 JSON 의 `documentKind` 필드로 지정하며, 생략하면 `CERTIFICATE`(증권) 입니다.
+            `countries`는 대문자 ISO 국가코드 배열입니다. 중복은 제거하고 선택 순서를 유지하며, 생략하거나 null이면 빈 목록으로 저장합니다.
           - `file` : 업로드할 PDF 파일
 
           응답의 trip.id 와 document.id 로 이어서 분석 시작 API를 호출합니다.
@@ -78,6 +79,7 @@ public class TripController {
   public List<TripResponse> getTrips(@AuthenticationPrincipal UUID userId) {
     return tripService.getTrips(userId);
   }
+
 
   @GetMapping("/{tripId}")
   @Operation(summary = "여행 세션 조회")

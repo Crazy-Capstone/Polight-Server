@@ -16,4 +16,5 @@ public record TripResponse(
     List<Concern> concerns,
     LocalDateTime createdAt,
     LocalDateTime updatedAt
+
 ) {}
