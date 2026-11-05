@@ -54,7 +54,7 @@ public class TripService {
     validateTripPeriod(request.startDate(), request.endDate());
 
     Trip trip = getOwnedTrip(userId, tripId);
-    trip.update(request.name().trim(), request.startDate(), request.endDate());
+    trip.update(request.name().trim(), request.startDate(), request.endDate(), request.countries());
 
     return tripMapper.toResponse(trip);
   }
@@ -68,6 +68,12 @@ public class TripService {
   public Trip getOwnedTrip(UUID userId, UUID tripId) {
     return tripRepository
         .findByIdAndUserId(tripId, userId)
+        .orElseThrow(() -> new BaseException(ErrorCode.TRIP_NOT_FOUND));
+  }
+
+  @Transactional
+  public Trip getOwnedTripForUpdate(UUID userId, UUID tripId) {
+    return tripRepository.findOwnedByIdForUpdate(tripId, userId)
         .orElseThrow(() -> new BaseException(ErrorCode.TRIP_NOT_FOUND));
   }
 

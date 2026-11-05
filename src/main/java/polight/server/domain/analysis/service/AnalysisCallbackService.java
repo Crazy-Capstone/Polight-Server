@@ -97,7 +97,7 @@ public class AnalysisCallbackService {
 
   private AnalysisResult getAnalysisResult(UUID analysisResultId) {
     return analysisResultRepository
-        .findById(analysisResultId)
+        .findByIdForUpdate(analysisResultId)
         .orElseThrow(() -> new BaseException(ErrorCode.ANALYSIS_RESULT_NOT_FOUND));
   }
 

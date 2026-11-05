@@ -23,6 +23,7 @@ public class TripMapper {
         .name(request.name().trim())
         .startDate(request.startDate())
         .endDate(request.endDate())
+        .countries(request.countriesOrEmpty())
         .concerns(request.concernsOrEmpty())
         .build();
   }
@@ -36,7 +37,8 @@ public class TripMapper {
         trip.getStatus(),
         trip.getConcerns(),
         trip.getCreatedAt(),
-        trip.getUpdatedAt());
+        trip.getUpdatedAt(),
+        trip.getCountries());
   }
 
   public List<TripResponse> toResponses(List<Trip> trips) {

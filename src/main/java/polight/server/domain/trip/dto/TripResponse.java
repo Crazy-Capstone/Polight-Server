@@ -1,5 +1,6 @@
 package polight.server.domain.trip.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,5 +16,8 @@ public record TripResponse(
     TripStatus status,
     List<Concern> concerns,
     LocalDateTime createdAt,
-    LocalDateTime updatedAt
+    LocalDateTime updatedAt,
+    @Schema(description = "선택 순서대로 정렬된 ISO 3166-1 alpha-2 대문자 국가코드 목록. 국가 정보가 없으면 빈 배열입니다.",
+        example = "[\"JP\",\"KR\"]")
+    List<String> countries
 ) {}

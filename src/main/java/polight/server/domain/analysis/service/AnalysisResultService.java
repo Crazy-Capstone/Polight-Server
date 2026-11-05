@@ -44,7 +44,7 @@ public class AnalysisResultService {
    */
   @Transactional
   public AnalysisResponse startAnalysis(UUID userId, UUID tripId, UUID documentId) {
-    PolicyDocument document = policyDocumentService.getOwnedDocument(userId, tripId, documentId);
+    PolicyDocument document = policyDocumentService.getOwnedDocumentForUpdate(userId, tripId, documentId);
 
     // 잠그고 읽는다. 동시 재시도와 타임아웃 처리가 같은 분석에 겹치지 않게 한다.
     AnalysisResult result =
