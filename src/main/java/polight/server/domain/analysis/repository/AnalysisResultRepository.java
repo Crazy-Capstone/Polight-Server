@@ -14,6 +14,10 @@ import polight.server.domain.analysis.entity.AnalysisResult;
 
 public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, UUID> {
 
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select a from AnalysisResult a where a.id = :analysisId")
+  Optional<AnalysisResult> findByIdForUpdate(@Param("analysisId") UUID analysisId);
+
   List<AnalysisResult> findByDocumentId(UUID documentId);
 
   Optional<AnalysisResult> findOneByDocumentId(UUID documentId);

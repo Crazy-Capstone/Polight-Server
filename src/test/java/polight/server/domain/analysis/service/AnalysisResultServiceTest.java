@@ -67,7 +67,7 @@ class AnalysisResultServiceTest {
             .storedFilePath(OBJECT_KEY)
             .documentKind(DocumentKind.CERTIFICATE)
             .build();
-    given(policyDocumentService.getOwnedDocument(userId, tripId, documentId)).willReturn(document);
+    given(policyDocumentService.getOwnedDocumentForUpdate(userId, tripId, documentId)).willReturn(document);
   }
 
   @Test

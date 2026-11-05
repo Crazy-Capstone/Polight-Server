@@ -42,6 +42,7 @@ public class PolicyDocumentService {
   @Transactional
   public PolicyDocumentResponse uploadDocumentTo(
       Trip trip, MultipartFile file, DocumentKind documentKind) {
+    trip = tripService.getOwnedTripForUpdate(trip.getUser().getId(), trip.getId());
     if (file.isEmpty()) {
       throw new BaseException(ErrorCode.EMPTY_POLICY_DOCUMENT_FILE);
     }
@@ -72,6 +73,13 @@ public class PolicyDocumentService {
 
     return policyDocumentRepository
         .findByIdAndTripIdAndUserId(documentId, tripId, userId)
+        .orElseThrow(() -> new BaseException(ErrorCode.POLICY_DOCUMENT_NOT_FOUND));
+  }
+
+  @Transactional
+  public PolicyDocument getOwnedDocumentForUpdate(UUID userId, UUID tripId, UUID documentId) {
+    tripService.getOwnedTripForUpdate(userId, tripId);
+    return policyDocumentRepository.findByIdAndTripIdAndUserId(documentId, tripId, userId)
         .orElseThrow(() -> new BaseException(ErrorCode.POLICY_DOCUMENT_NOT_FOUND));
   }
 

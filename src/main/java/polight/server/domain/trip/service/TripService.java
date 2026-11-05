@@ -71,6 +71,12 @@ public class TripService {
         .orElseThrow(() -> new BaseException(ErrorCode.TRIP_NOT_FOUND));
   }
 
+  @Transactional
+  public Trip getOwnedTripForUpdate(UUID userId, UUID tripId) {
+    return tripRepository.findOwnedByIdForUpdate(tripId, userId)
+        .orElseThrow(() -> new BaseException(ErrorCode.TRIP_NOT_FOUND));
+  }
+
   private void validateTripPeriod(LocalDate startDate, LocalDate endDate) {
     if (endDate.isBefore(startDate)) {
       throw new BaseException(ErrorCode.INVALID_TRIP_PERIOD);
