@@ -90,7 +90,15 @@ public class TripController {
   }
 
   @PatchMapping("/{tripId}")
-  @Operation(summary = "여행 세션 정보 변경")
+  @Operation(
+      summary = "여행 세션 정보 변경",
+      description = """
+          본인 여행의 이름, 시작일, 종료일을 수정하고 변경된 여행 정보를 반환합니다.
+          이름과 시작일, 종료일은 필수입니다.
+          countries를 전달하면 대문자 ISO 국가코드를 검증하고 중복 제거 후 선택 순서대로 교체합니다.
+          countries를 생략하거나 null로 보내면 기존 국가를 유지하며, []로 보내면 비웁니다.
+          잘못된 입력과 역전된 여행 기간은 400, 존재하지 않거나 타인 소유인 여행은 404 TRIP_NOT_FOUND를 반환합니다.
+          """)
   public TripResponse updateTrip(
       @AuthenticationPrincipal UUID userId,
       @PathVariable UUID tripId,

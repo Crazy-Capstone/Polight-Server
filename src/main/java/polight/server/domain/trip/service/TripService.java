@@ -54,7 +54,7 @@ public class TripService {
     validateTripPeriod(request.startDate(), request.endDate());
 
     Trip trip = getOwnedTrip(userId, tripId);
-    trip.update(request.name().trim(), request.startDate(), request.endDate());
+    trip.update(request.name().trim(), request.startDate(), request.endDate(), request.countries());
 
     return tripMapper.toResponse(trip);
   }

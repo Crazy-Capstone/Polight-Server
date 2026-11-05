@@ -84,13 +84,24 @@ public class Trip extends BaseTimeEntity {
     this.endDate = endDate;
     this.status = status == null ? TripStatus.PLANNED : status;
     this.concerns = normalizeConcerns(concerns);
-    this.countries = countries == null ? new ArrayList<>() : new ArrayList<>(new LinkedHashSet<>(countries));
+    this.countries = normalizeCountries(countries);
   }
 
   public void update(String name, LocalDate startDate, LocalDate endDate) {
+    update(name, startDate, endDate, null);
+  }
+
+  public void update(String name, LocalDate startDate, LocalDate endDate, Collection<String> countries) {
     this.name = name;
     this.startDate = startDate;
     this.endDate = endDate;
+    if (countries != null) {
+      this.countries = normalizeCountries(countries);
+    }
+  }
+
+  private static List<String> normalizeCountries(Collection<String> countries) {
+    return countries == null ? new ArrayList<>() : new ArrayList<>(new LinkedHashSet<>(countries));
   }
 
   /** 중복을 제거하고 enum 선언 순서로 정렬한다. 같은 선택이 어떤 순서로 와도 저장된 값이 같아진다. */
