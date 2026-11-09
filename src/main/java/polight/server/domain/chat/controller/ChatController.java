@@ -49,6 +49,7 @@ public class ChatController {
             - `index` 는 답변 안에서 몇 번째 근거인지, `cited` 는 답변 문장에 실제로 인용됐는지입니다. **`cited` 가 `null` 이면 "모름"이므로 걸러내지 마세요.**
             - `clauseType` 은 조항 성격입니다. 목록에 없는 값이 올 수 있으니 모르는 값은 무시하세요.
             - `sectionTitle`·`clausePath`·`pageStart`·`pageEnd`·`clauseType`·`text` 는 비어 있을 수 있습니다. 그때도 `quote` 는 남습니다.
+          - `claimDocuments` 는 보험금 청구서류와 약관 근거입니다. 안내할 서류가 없으면 빈 배열입니다.
           - 이 API는 AI 서버의 답변 생성을 기다립니다. 응답까지 수 초가 걸리므로 클라이언트 타임아웃을 넉넉히 두세요.
 
           AI 서버가 응답하지 못하면 `502` 입니다. 이때도 **보낸 질문은 저장되어 있으므로** 화면에서 지우지 마세요.
@@ -74,6 +75,7 @@ public class ChatController {
             다만 `text`·`clauseType`·`index`·`cited` 가 붙기 전에 저장된 메시지는 그 필드들이 `null` 입니다.
           - `suggestedContacts` 도 질문 API 와 같은 값이 그대로 돌아옵니다. 사용자 메시지에는 항상 빈 배열입니다.
             이 필드가 붙기 전에 저장된 메시지는 빈 배열로 나옵니다 -- 그때 받은 연락처를 되살릴 방법은 없습니다.
+          - `claimDocuments` 는 답변 당시 저장된 값이며, 저장된 서류가 없는 메시지에서는 빈 배열입니다.
           - 항목의 모양은 질문 API(`POST .../messages`) 응답과 같으므로 두 경로를 다르게 다룰 필요가 없습니다.
 
           `limit` 은 최근 몇 개를 받을지이며 기본 50, 최대 200입니다. 범위를 벗어난 값은 서버가 맞춥니다.

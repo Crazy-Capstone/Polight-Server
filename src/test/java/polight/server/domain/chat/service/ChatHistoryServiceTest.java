@@ -64,6 +64,7 @@ class ChatHistoryServiceTest {
                     ChatResponseType.TEXT,
                     List.of(),
                     List.of(),
+                    List.of(),
                     LocalDateTime.now())));
 
     ChatHistoryResponse response = service.getMessages(userId, tripId, null);

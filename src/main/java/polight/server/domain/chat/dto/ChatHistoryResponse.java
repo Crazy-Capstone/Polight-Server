@@ -43,5 +43,7 @@ public record ChatHistoryResponse(
               example = "[\"POLICE\"]")
           List<String> suggestedContacts,
       List<SourceResponse> sources,
+      @Schema(description = "답변 당시의 청구서류. 저장된 서류가 없으면 빈 배열")
+          List<ClaimDocument> claimDocuments,
       LocalDateTime createdAt) {}
 }

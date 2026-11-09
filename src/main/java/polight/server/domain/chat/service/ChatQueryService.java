@@ -10,6 +10,7 @@ import polight.server.domain.chat.client.RagQueryClient;
 import polight.server.domain.chat.dto.ChatAnswerResponse;
 import polight.server.domain.chat.dto.ChatAnswerResponse.SourceResponse;
 import polight.server.domain.chat.dto.ChatQuestionRequest;
+import polight.server.domain.chat.dto.ClaimDocument;
 import polight.server.domain.chat.dto.RagQueryRequest;
 import polight.server.domain.chat.dto.RagQueryResponse;
 import polight.server.domain.chat.entity.ChatMessage;
@@ -98,11 +99,12 @@ public class ChatQueryService {
 
     List<SourceResponse> sources = enrichSources(certificate.termsId(), answer);
     List<String> suggestedContacts = chatMessageMapper.toSuggestedContacts(answer);
+    List<ClaimDocument> claimDocuments = chatMessageMapper.toClaimDocuments(answer);
     ChatMessage saved =
         chatMessageService.appendAssistantMessage(
             sessionId,
             answer.answer(),
-            chatMessageMapper.toMetadataJson(sources, suggestedContacts, latencyMs));
+            chatMessageMapper.toMetadataJson(sources, suggestedContacts, claimDocuments, latencyMs));
 
     return new ChatAnswerResponse(
         sessionId,
@@ -110,7 +112,8 @@ public class ChatQueryService {
         saved.getContent(),
         saved.getResponseType(),
         suggestedContacts,
-        sources);
+        sources,
+        claimDocuments);
   }
 
   /**
@@ -132,6 +135,7 @@ public class ChatQueryService {
         saved.getId(),
         saved.getContent(),
         saved.getResponseType(),
+        List.of(),
         List.of(),
         List.of());
   }

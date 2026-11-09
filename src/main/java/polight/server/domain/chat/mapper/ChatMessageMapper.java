@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import polight.server.domain.chat.dto.ChatAnswerResponse.SourceResponse;
 import polight.server.domain.chat.dto.ChatHistoryResponse.Message;
 import polight.server.domain.chat.dto.ChatMessageMetadata;
+import polight.server.domain.chat.dto.ClaimDocument;
 import polight.server.domain.chat.dto.RagQueryRequest.HistoryTurn;
 import polight.server.domain.chat.dto.RagQueryResponse;
 import polight.server.domain.chat.entity.ChatMessage;
@@ -146,7 +147,14 @@ public class ChatMessageMapper {
             ? List.of()
             : metadata.suggestedContacts(),
         metadata == null || metadata.sources() == null ? List.of() : metadata.sources(),
+        metadata == null || metadata.claimDocuments() == null
+            ? List.of()
+            : metadata.claimDocuments(),
         message.getCreatedAt());
+  }
+
+  public List<ClaimDocument> toClaimDocuments(RagQueryResponse response) {
+    return response.claimDocuments() == null ? List.of() : response.claimDocuments();
   }
 
   /**
@@ -199,10 +207,13 @@ public class ChatMessageMapper {
    * <p>직렬화가 실패해도 답변은 살린다. 근거는 부가 정보이고, 이것 때문에 사용자가 받은 답을 잃을 이유가 없다.
    */
   public String toMetadataJson(
-      List<SourceResponse> sources, List<String> suggestedContacts, long latencyMs) {
+      List<SourceResponse> sources,
+      List<String> suggestedContacts,
+      List<ClaimDocument> claimDocuments,
+      long latencyMs) {
     try {
       return objectMapper.writeValueAsString(
-          new ChatMessageMetadata(sources, suggestedContacts, latencyMs));
+          new ChatMessageMetadata(sources, suggestedContacts, claimDocuments, latencyMs));
     } catch (JsonProcessingException exception) {
       log.warn("대화 메타데이터를 직렬화하지 못해 비워 둡니다.", exception);
       return null;
