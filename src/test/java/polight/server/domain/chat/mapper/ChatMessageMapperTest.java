@@ -45,7 +45,7 @@ class ChatMessageMapperTest {
     UUID documentId = UUID.randomUUID();
     RagQueryResponse response =
         new RagQueryResponse(
-            "보상됩니다.", "TEXT", List.of(), List.of(legacySource(chunkId, documentId)));
+            "보상됩니다.", "TEXT", List.of(), List.of(legacySource(chunkId, documentId)), List.of());
 
     List<SourceResponse> sources = mapper.toSources(response, List.of());
 
@@ -65,7 +65,7 @@ class ChatMessageMapperTest {
     UUID chunkId = UUID.randomUUID();
     RagQueryResponse response =
         new RagQueryResponse(
-            "보상됩니다.", "TEXT", List.of(), List.of(fullSource(chunkId, UUID.randomUUID())));
+            "보상됩니다.", "TEXT", List.of(), List.of(fullSource(chunkId, UUID.randomUUID())), List.of());
 
     List<SourceResponse> sources = mapper.toSources(response, List.of());
 
@@ -85,7 +85,7 @@ class ChatMessageMapperTest {
     UUID documentId = UUID.randomUUID();
     RagQueryResponse response =
         new RagQueryResponse(
-            "보상됩니다.", "TEXT", List.of(), List.of(legacySource(chunkId, documentId)));
+            "보상됩니다.", "TEXT", List.of(), List.of(legacySource(chunkId, documentId)), List.of());
 
     List<SourceResponse> sources = mapper.toSources(response, List.of(termsChunk(chunkId)));
 
@@ -105,7 +105,7 @@ class ChatMessageMapperTest {
     UUID chunkId = UUID.randomUUID();
     RagQueryResponse response =
         new RagQueryResponse(
-            "보상됩니다.", "TEXT", List.of(), List.of(legacySource(chunkId, UUID.randomUUID())));
+            "보상됩니다.", "TEXT", List.of(), List.of(legacySource(chunkId, UUID.randomUUID())), List.of());
 
     List<SourceResponse> sources = mapper.toSources(response, List.of(termsChunk(chunkId)));
 
@@ -120,7 +120,7 @@ class ChatMessageMapperTest {
     UUID chunkId = UUID.randomUUID();
     RagQueryResponse response =
         new RagQueryResponse(
-            "보상됩니다.", "TEXT", List.of(), List.of(fullSource(chunkId, UUID.randomUUID())));
+            "보상됩니다.", "TEXT", List.of(), List.of(fullSource(chunkId, UUID.randomUUID())), List.of());
 
     List<SourceResponse> sources = mapper.toSources(response, List.of(termsChunk(chunkId)));
 
@@ -138,7 +138,7 @@ class ChatMessageMapperTest {
     UUID chunkId = UUID.randomUUID();
     RagQueryResponse response =
         new RagQueryResponse(
-            "보상됩니다.", "TEXT", List.of(), List.of(fullSource(chunkId, UUID.randomUUID())));
+            "보상됩니다.", "TEXT", List.of(), List.of(fullSource(chunkId, UUID.randomUUID())), List.of());
 
     List<SourceResponse> sources = mapper.toSources(response, List.of(termsChunk(chunkId)));
 
@@ -151,7 +151,7 @@ class ChatMessageMapperTest {
   @Test
   void passesSuggestedContactsThrough() {
     RagQueryResponse response =
-        new RagQueryResponse("경찰에 신고하세요.", "TEXT", List.of("POLICE", "EMBASSY"), List.of());
+        new RagQueryResponse("경찰에 신고하세요.", "TEXT", List.of("POLICE", "EMBASSY"), List.of(), List.of());
 
     assertThat(mapper.toSuggestedContacts(response)).containsExactly("POLICE", "EMBASSY");
   }
@@ -159,7 +159,7 @@ class ChatMessageMapperTest {
   @Test
   void passesUnknownContactKindThroughInsteadOfDroppingIt() {
     RagQueryResponse response =
-        new RagQueryResponse("구급차를 부르세요.", "TEXT", List.of("AMBULANCE"), List.of());
+        new RagQueryResponse("구급차를 부르세요.", "TEXT", List.of("AMBULANCE"), List.of(), List.of());
 
     // 여기서 막으면 AI가 4번째 종류를 배포하는 순간 백엔드도 같이 배포해야 그 값이 화면에 닿는다.
     // 프론트가 모르는 값은 그리지 않을 뿐이다.
@@ -168,7 +168,7 @@ class ChatMessageMapperTest {
 
   @Test
   void turnsOmittedSuggestedContactsIntoEmptyList() {
-    RagQueryResponse response = new RagQueryResponse("보상됩니다.", "TEXT", null, List.of());
+    RagQueryResponse response = new RagQueryResponse("보상됩니다.", "TEXT", null, List.of(), List.of());
 
     // 프론트가 null 과 빈 배열을 나눠 다룰 이유가 없다.
     assertThat(mapper.toSuggestedContacts(response)).isEmpty();
@@ -176,7 +176,7 @@ class ChatMessageMapperTest {
 
   @Test
   void readsStoredSuggestedContactsBackFromMetadata() {
-    String metadata = mapper.toMetadataJson(List.of(), List.of("POLICE"), 900L);
+    String metadata = mapper.toMetadataJson(List.of(), List.of("POLICE"), List.of(), 900L);
 
     List<Message> messages = mapper.toMessages(List.of(assistantWithMetadata(metadata)));
 
@@ -195,7 +195,7 @@ class ChatMessageMapperTest {
 
   @Test
   void returnsEmptySourcesWhenAiOmitsThem() {
-    assertThat(mapper.toSources(new RagQueryResponse("모르겠습니다.", "TEXT", null, null), List.of()))
+    assertThat(mapper.toSources(new RagQueryResponse("모르겠습니다.", "TEXT", null, null, null), List.of()))
         .isEmpty();
   }
 
@@ -205,6 +205,7 @@ class ChatMessageMapperTest {
         mapper.toMetadataJson(
             List.of(new SourceResponse(null, null, null, "제3관", "제3관 > 제12조", 12, 12, null, "인용", null, null)),
             List.of("POLICE"),
+            List.of(),
             1234L);
 
     assertThat(json).contains("\"latencyMs\":1234").contains("제3관 > 제12조");
@@ -223,7 +224,7 @@ class ChatMessageMapperTest {
             });
 
     // 근거는 부가 정보다. 직렬화가 실패해도 사용자가 받은 답을 잃을 이유가 없다.
-    assertThat(failing.toMetadataJson(List.of(), List.of(), 1L)).isNull();
+    assertThat(failing.toMetadataJson(List.of(), List.of(), List.of(), 1L)).isNull();
   }
 
   @Test
@@ -249,6 +250,7 @@ class ChatMessageMapperTest {
         mapper.toMetadataJson(
             List.of(new SourceResponse(null, null, null, "제3관", "제3관 > 제12조", 12, 12, null, "인용", null, null)),
             List.of("POLICE"),
+            List.of(),
             900L);
 
     List<Message> messages = mapper.toMessages(List.of(assistantWithMetadata(metadata)));

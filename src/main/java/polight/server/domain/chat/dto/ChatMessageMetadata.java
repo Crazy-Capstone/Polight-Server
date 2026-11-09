@@ -15,4 +15,7 @@ import polight.server.domain.chat.dto.ChatAnswerResponse.SourceResponse;
  * @param latencyMs AI 서버 왕복 시간. 답변이 느릴 때 검색·생성 어느 쪽 문제인지 나누려면 저장해 둔 값이 있어야 한다
  */
 public record ChatMessageMetadata(
-    List<SourceResponse> sources, List<String> suggestedContacts, long latencyMs) {}
+    List<SourceResponse> sources,
+    List<String> suggestedContacts,
+    List<ClaimDocument> claimDocuments,
+    long latencyMs) {}

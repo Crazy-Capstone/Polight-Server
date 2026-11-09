@@ -24,7 +24,9 @@ public record ChatAnswerResponse(
                     + "-- 모르는 값은 그리지 않고 넘기면 된다",
             example = "[\"POLICE\"]")
         List<String> suggestedContacts,
-    List<SourceResponse> sources) {
+    List<SourceResponse> sources,
+    @Schema(description = "보험금 청구서류 및 약관 근거. 안내할 서류가 없으면 빈 배열")
+        List<ClaimDocument> claimDocuments) {
 
   /**
    * 답변 근거 1건.

@@ -165,7 +165,7 @@ class ChatQueryServiceTest {
   @Test
   void storesAnswerAsTextEvenWhenAiSendsCardType() {
     given(ragQueryClient.query(any()))
-        .willReturn(new RagQueryResponse("병원 목록입니다.", "HOSPITAL_CARDS", List.of(), List.of()));
+        .willReturn(new RagQueryResponse("병원 목록입니다.", "HOSPITAL_CARDS", List.of(), List.of(), List.of()));
 
     ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("병원 알려줘"));
 
@@ -188,7 +188,7 @@ class ChatQueryServiceTest {
 
   @Test
   void doesNotLookUpChunksWhenAiReturnsNoSources() {
-    given(ragQueryClient.query(any())).willReturn(new RagQueryResponse("모르겠습니다.", "TEXT", null, null));
+    given(ragQueryClient.query(any())).willReturn(new RagQueryResponse("모르겠습니다.", "TEXT", null, null, List.of()));
 
     service.ask(userId, tripId, new ChatQuestionRequest("이건 뭐죠?"));
 
@@ -205,7 +205,8 @@ class ChatQueryServiceTest {
                 "보상됩니다.",
                 "TEXT",
                 List.of(),
-                List.of(source(chunkId, UUID.randomUUID()))));
+                List.of(source(chunkId, UUID.randomUUID())),
+                List.of()));
     given(termsChunkQueryService.findChunksIn(eq(termsId), anyList())).willReturn(List.of());
 
     service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
@@ -223,7 +224,8 @@ class ChatQueryServiceTest {
                 "보상됩니다.",
                 "TEXT",
                 List.of(),
-                List.of(source(UUID.randomUUID(), null))));
+                List.of(source(UUID.randomUUID(), null)),
+                List.of()));
     given(termsChunkQueryService.findChunksIn(any(), anyList())).willReturn(List.of());
 
     ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
@@ -236,7 +238,7 @@ class ChatQueryServiceTest {
   @Test
   void passesSuggestedContactsFromAiToTheResponse() {
     given(ragQueryClient.query(any()))
-        .willReturn(new RagQueryResponse("경찰에 신고하세요.", "TEXT", List.of("POLICE"), List.of()));
+        .willReturn(new RagQueryResponse("경찰에 신고하세요.", "TEXT", List.of("POLICE"), List.of(), List.of()));
     given(chatMessageMapper.toSuggestedContacts(any())).willReturn(List.of("POLICE"));
     given(chatMessageService.appendAssistantMessage(eq(sessionId), any(), any()))
         .willReturn(assistantMessage("경찰에 신고하세요."));
@@ -245,7 +247,7 @@ class ChatQueryServiceTest {
 
     assertThat(response.suggestedContacts()).containsExactly("POLICE");
     // 이력 조회도 같은 모양이어야 하므로 metadata_json 에 함께 저장한다.
-    verify(chatMessageMapper).toMetadataJson(anyList(), eq(List.of("POLICE")), anyLong());
+    verify(chatMessageMapper).toMetadataJson(anyList(), eq(List.of("POLICE")), anyList(), anyLong());
   }
 
   @Test
@@ -266,11 +268,11 @@ class ChatQueryServiceTest {
     service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
 
     // 답변이 느릴 때 검색·생성 어느 쪽 문제인지 나누려면 저장해 둔 값이 있어야 한다.
-    verify(chatMessageMapper).toMetadataJson(anyList(), anyList(), anyLong());
+    verify(chatMessageMapper).toMetadataJson(anyList(), anyList(), anyList(), anyLong());
   }
 
   private RagQueryResponse answer(String text) {
-    return new RagQueryResponse(text, "TEXT", List.of(), List.of());
+    return new RagQueryResponse(text, "TEXT", List.of(), List.of(), List.of());
   }
 
   private RagQueryResponse.Source source(UUID chunkId, UUID documentId) {

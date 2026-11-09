@@ -16,7 +16,11 @@ import java.util.UUID;
  * @param sources LLM이 생성한 문장이 아니라 검색된 원문에서 잘라낸 인용이다. AI가 생략할 수 있으므로 {@code null}일 수 있다
  */
 public record RagQueryResponse(
-    String answer, String responseType, List<String> suggestedContacts, List<Source> sources) {
+    String answer,
+    String responseType,
+    List<String> suggestedContacts,
+    List<Source> sources,
+    List<ClaimDocument> claimDocuments) {
 
   /**
    * 답변 근거 1건.
