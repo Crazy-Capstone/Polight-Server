@@ -42,8 +42,31 @@ public class ConsentService {
   // 서버가 확인한 User를
   @Transactional
   public void recordConsents(User user, List<ConsentDecision> decisions) {
+    append(persistedUserId(user), validateDecisions(decisions));
+  }
+
+  @Transactional
+  public ConsentStatusResponse changeConsents(User user, List<ConsentDecision> decisions) {
     UUID userId = persistedUserId(user);
     var indexed = validateDecisions(decisions);
+    if (indexed.isEmpty()) {
+      throw new BaseException(ErrorCode.INVALID_INPUT);
+    }
+    Map<String, String> blocked = new LinkedHashMap<>();
+    for (var type : ConsentPolicy.REQUIRED_AT_SIGNUP) {
+      var decision = indexed.get(type);
+      if (decision != null && !decision.agreed()) {
+        blocked.put(type.name(), "이 API에서는 필수 동의를 철회할 수 없습니다.");
+      }
+    }
+    if (!blocked.isEmpty()) {
+      throw new BaseException(ErrorCode.REQUIRED_CONSENT_WITHDRAWAL_NOT_SUPPORTED, blocked);
+    }
+    append(userId, indexed);
+    return statusFor(userId);
+  }
+
+  private void append(UUID userId, Map<ConsentType, ConsentDecision> indexed) {
     if (indexed.isEmpty()) {
       return;
     }
@@ -58,6 +81,10 @@ public class ConsentService {
 
   @Transactional(readOnly = true)
   public ConsentStatusResponse getStatus(User user) {
+    return statusFor(persistedUserId(user));
+  }
+
+  private ConsentStatusResponse statusFor(UUID userId) {
     var consents = new EnumMap<ConsentType, Boolean>(ConsentType.class);
 
     // 1. 이력이 없으면 false (기본값)
@@ -66,7 +93,7 @@ public class ConsentService {
     }
 
     // 2. 유형별 최신 이력을 조회
-    for (var history : histories.findLatestByUserId(persistedUserId(user))) {
+    for (var history : histories.findLatestByUserId(userId)) {
       ConsentType type = history.getConsentType();
 
       // 3. 최신 동의가 철회됐거나 문서 버전이 다르면 false
