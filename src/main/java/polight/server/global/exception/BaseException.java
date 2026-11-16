@@ -1,5 +1,6 @@
 package polight.server.global.exception;
 
+import java.util.Map;
 import lombok.Getter;
 
 /**
@@ -12,15 +13,24 @@ import lombok.Getter;
 public class BaseException extends RuntimeException {
 
   private final ErrorCode errorCode;
+  private final Map<String, String> fieldErrors;
 
   public BaseException(ErrorCode errorCode) {
     super(errorCode.getMessage());
     this.errorCode = errorCode;
+    this.fieldErrors = null;
+  }
+
+  public BaseException(ErrorCode errorCode, Map<String, String> fieldErrors) {
+    super(errorCode.getMessage());
+    this.errorCode = errorCode;
+    this.fieldErrors = Map.copyOf(fieldErrors);
   }
 
   /** 원인 예외를 함께 남겨야 할 때 사용한다. 로그에는 원인이 남고 응답에는 노출되지 않는다. */
   public BaseException(ErrorCode errorCode, Throwable cause) {
     super(errorCode.getMessage(), cause);
     this.errorCode = errorCode;
+    this.fieldErrors = null;
   }
 }

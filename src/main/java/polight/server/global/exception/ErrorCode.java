@@ -28,6 +28,7 @@ public enum ErrorCode {
 
   // 사용자
   USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
+  REQUIRED_CONSENT_NOT_AGREED(HttpStatus.BAD_REQUEST, "회원가입 필수 동의가 충족되지 않았습니다."),
 
   // 여행
   TRIP_NOT_FOUND(HttpStatus.NOT_FOUND, "여행을 찾을 수 없습니다."),
