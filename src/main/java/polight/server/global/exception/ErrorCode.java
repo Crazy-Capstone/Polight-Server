@@ -25,9 +25,14 @@ public enum ErrorCode {
   KAKAO_USER_INFO_REQUEST_FAILED(HttpStatus.UNAUTHORIZED, "카카오 사용자 정보 조회에 실패했습니다."),
   KAKAO_USER_ID_NOT_FOUND(HttpStatus.UNAUTHORIZED, "카카오 사용자 식별자(providerId)가 없습니다."),
   INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "리프레시 토큰이 유효하지 않거나 만료되었습니다. 다시 로그인해 주세요."),
+  SIGNUP_REQUIRED(HttpStatus.CONFLICT, "동의를 제출하고 가입을 완료해 주세요."),
+  INVALID_SIGNUP_TOKEN(HttpStatus.UNAUTHORIZED, "가입 토큰이 유효하지 않습니다. 카카오 인증부터 다시 시작해 주세요."),
+  KAKAO_USER_ALREADY_REGISTERED(HttpStatus.CONFLICT, "이미 가입된 카카오 계정입니다. 다시 로그인해 주세요."),
 
   // 사용자
   USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
+  REQUIRED_CONSENT_NOT_AGREED(HttpStatus.BAD_REQUEST, "회원가입 필수 동의가 충족되지 않았습니다."),
+  REQUIRED_CONSENT_WITHDRAWAL_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "이 API에서는 필수 동의를 철회할 수 없습니다."),
 
   // 여행
   TRIP_NOT_FOUND(HttpStatus.NOT_FOUND, "여행을 찾을 수 없습니다."),

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,7 +38,7 @@ class AuthServiceTest {
   @InjectMocks private AuthService authService;
 
   @Test
-  void loginWithKakao_usesProviderIdForFindOrCreate() {
+  void loginWithKakao_usesProviderIdToFindExistingUser() {
     KakaoUserInfoResponse userInfo =
         new KakaoUserInfoResponse(
             12345L,
@@ -49,13 +50,13 @@ class AuthServiceTest {
     given(kakaoOAuthClient.requestToken("code"))
         .willReturn(new KakaoTokenResponse("bearer", "kakao-access", null, 3600L, null));
     given(kakaoOAuthClient.requestUserInfo("kakao-access")).willReturn(userInfo);
-    given(userService.findOrCreateKakaoUser("12345", "a@b.com", "nick")).willReturn(user);
+    given(userService.findKakaoUserForLogin("12345", "a@b.com", "nick")).willReturn(Optional.of(user));
     given(jwtTokenProvider.createAccessToken(any(User.class))).willReturn("service-token");
     given(jwtTokenProvider.getAccessTokenExpirySeconds()).willReturn(3600L);
 
     authService.loginWithKakao("code");
 
-    verify(userService, times(1)).findOrCreateKakaoUser(eq("12345"), eq("a@b.com"), eq("nick"));
+    verify(userService, times(1)).findKakaoUserForLogin(eq("12345"), eq("a@b.com"), eq("nick"));
   }
 
   @Test
@@ -77,7 +78,7 @@ class AuthServiceTest {
     given(kakaoOAuthClient.requestToken("code"))
         .willReturn(new KakaoTokenResponse("bearer", "kakao-access", null, 3600L, null));
     given(kakaoOAuthClient.requestUserInfo("kakao-access")).willReturn(userInfo);
-    given(userService.findOrCreateKakaoUser("12345", "a@b.com", "nick")).willReturn(user);
+    given(userService.findKakaoUserForLogin("12345", "a@b.com", "nick")).willReturn(Optional.of(user));
     given(jwtTokenProvider.createAccessToken(any(User.class))).willReturn("service-token");
     given(jwtTokenProvider.getAccessTokenExpirySeconds()).willReturn(3600L);
 
@@ -102,7 +103,7 @@ class AuthServiceTest {
     given(kakaoOAuthClient.requestToken("code"))
         .willReturn(new KakaoTokenResponse("bearer", "kakao-access", null, 3600L, null));
     given(kakaoOAuthClient.requestUserInfo("kakao-access")).willReturn(userInfo);
-    given(userService.findOrCreateKakaoUser("12345", "a@b.com", "카카오사용자")).willReturn(user);
+    given(userService.findKakaoUserForLogin("12345", "a@b.com", "카카오사용자")).willReturn(Optional.of(user));
     given(jwtTokenProvider.createAccessToken(any(User.class))).willReturn("service-token");
     given(jwtTokenProvider.getAccessTokenExpirySeconds()).willReturn(3600L);
 
@@ -130,7 +131,7 @@ class AuthServiceTest {
     given(kakaoOAuthClient.requestToken("code"))
         .willReturn(new KakaoTokenResponse("bearer", "kakao-access", "kakao-refresh", 3600L, null));
     given(kakaoOAuthClient.requestUserInfo("kakao-access")).willReturn(userInfo);
-    given(userService.findOrCreateKakaoUser("12345", "a@b.com", "nick")).willReturn(user);
+    given(userService.findKakaoUserForLogin("12345", "a@b.com", "nick")).willReturn(Optional.of(user));
     given(jwtTokenProvider.createAccessToken(any(User.class))).willReturn("service-token");
     given(jwtTokenProvider.getAccessTokenExpirySeconds()).willReturn(3600L);
     given(refreshTokenStore.issue(user.getId())).willReturn("refresh-token");
