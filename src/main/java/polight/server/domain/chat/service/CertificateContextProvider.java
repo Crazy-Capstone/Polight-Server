@@ -6,6 +6,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import polight.server.domain.analysis.entity.AnalysisResult;
+import polight.server.domain.chat.dto.CertificateStatus;
+import polight.server.domain.insurance.entity.DocumentKind;
+import polight.server.domain.insurance.entity.DocumentParseStatus;
+import polight.server.domain.insurance.entity.PolicyDocument;
+import polight.server.domain.insurance.repository.PolicyDocumentRepository;
 import polight.server.domain.analysis.entity.CoverageItem;
 import polight.server.domain.analysis.repository.AnalysisResultRepository;
 import polight.server.domain.analysis.repository.CoverageItemRepository;
@@ -20,13 +25,14 @@ import polight.server.domain.chat.dto.RagQueryRequest.Coverage;
  * <p>검색 범위는 증권 분석이 매칭해 둔 약관({@code analysis_results.matched_terms_id})이다. 그것이 "이 사용자가 산 상품의
  * 약관"을 아는 유일한 경로다.
  *
- * <p>증권 분석이 아직 없거나 진행 중이면 빈 컨텍스트를 돌려준다. 그러면 {@code termsId}가 비고, 호출한 쪽이 AI를 부르지 않는다.
+ * <p>증권 분석이 아직 없거나 진행 중이면 빈 컨텍스트를 돌려준다. AI 요청용 상태는 별도로 계산하며, 약관 없는 요청의 AI 호출 여부는 호출 서비스에서 결정한다.
  */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class CertificateContextProvider {
 
+  private final PolicyDocumentRepository policyDocumentRepository;
   private final AnalysisResultRepository analysisResultRepository;
   private final CoverageItemRepository coverageItemRepository;
 
@@ -35,37 +41,56 @@ public class CertificateContextProvider {
    * @param complete {@code coverages}가 증권 보장내용 표 전체인지. AI가 원본 표의 행 수를 알 수 없어 콜백으로 오지 않으므로 당분간 항상
    *     {@code false}다. 값이 켜지는 시점에 이 코드는 바뀌지 않는다
    */
-  public record CertificateContext(UUID termsId, List<Coverage> coverages, boolean complete) {
+  public record CertificateContext(
+      UUID termsId, List<Coverage> coverages, boolean complete, CertificateStatus status) {
 
-    static CertificateContext empty() {
-      return new CertificateContext(null, List.of(), false);
+    static CertificateContext empty(CertificateStatus status) {
+      return new CertificateContext(null, List.of(), false, status);
     }
 
-    /** 검색할 약관이 정해졌는지. 아니면 AI를 부를 수 없다. */
     public boolean hasTerms() {
       return termsId != null;
     }
   }
 
   public CertificateContext load(UUID userId, UUID tripId) {
-    List<AnalysisResult> analyses =
-        analysisResultRepository.findCompletedCertificateAnalyses(userId, tripId);
-    if (analyses.isEmpty()) {
-      return CertificateContext.empty();
+    // termsId 유무로 미등록을 판단하지 않는다. 약관 문서는 증권 등록에 포함하지 않는다.
+    PolicyDocument document = policyDocumentRepository
+        .findFirstByUserIdAndTripIdAndDocumentKindOrderByUploadedAtDescIdDesc(
+            userId, tripId, DocumentKind.CERTIFICATE).orElse(null);
+    if (document == null) {
+      // 증권 상태는 사용자 기준이다. 다른 여행에 증권이 있으면 미등록으로 오인하지 않는다.
+      // 다른 여행의 담보와 약관은 현재 여행 답변에 섞지 않는다.
+      if (tripId != null) {
+        return policyDocumentRepository.findFirstByUserIdAndDocumentKindOrderByUploadedAtDescIdDesc(
+                userId, DocumentKind.CERTIFICATE)
+            .map(registered -> CertificateContext.empty(statusOf(registered)))
+            .orElseGet(() -> CertificateContext.empty(CertificateStatus.UNREGISTERED));
+      }
+      return CertificateContext.empty(CertificateStatus.UNREGISTERED);
     }
-
-    // 같은 여행에 증권을 여러 번 올릴 수 있다. 최근 분석이 현재 가입 상태다.
-    AnalysisResult latest = analyses.get(0);
-
+    AnalysisResult latest = analysisResultRepository.findOneByDocumentId(document.getId()).orElse(null);
+    if (latest == null) {
+      return CertificateContext.empty(document.getParseStatus() == DocumentParseStatus.FAILED
+          ? CertificateStatus.FAILED : CertificateStatus.PROCESSING);
+    }
+    CertificateStatus status = CertificateStatus.valueOf(latest.getStatus().name());
+    if (status != CertificateStatus.COMPLETED) {
+      return CertificateContext.empty(status);
+    }
     List<Coverage> coverages =
         coverageItemRepository.findByAnalysisResultIdOrderBySortOrderAsc(latest.getId()).stream()
             .map(CertificateContextProvider::toCoverage)
             .toList();
-
-    // 약관 매칭에 실패한 분석은 termsId 가 비어 나간다. 그 경우 담보는 실어 보내도 검색할 약관이 없다.
     UUID termsId = latest.hasMatchedTerms() ? latest.getMatchedTerms().getId() : null;
+    return new CertificateContext(termsId, coverages, latest.isCoveragesComplete(), status);
+  }
 
-    return new CertificateContext(termsId, coverages, latest.isCoveragesComplete());
+  private CertificateStatus statusOf(PolicyDocument document) {
+    return analysisResultRepository.findOneByDocumentId(document.getId())
+        .map(analysis -> CertificateStatus.valueOf(analysis.getStatus().name()))
+        .orElse(document.getParseStatus() == DocumentParseStatus.FAILED
+            ? CertificateStatus.FAILED : CertificateStatus.PROCESSING);
   }
 
   /**

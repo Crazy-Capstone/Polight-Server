@@ -8,6 +8,10 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import polight.server.domain.chat.dto.CertificateStatus;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpRequestFactory;
@@ -19,6 +23,27 @@ import polight.server.domain.chat.dto.RagQueryResponse;
 import polight.server.global.exception.BaseException;
 
 class FastApiRagQueryClientTest {
+
+  @ParameterizedTest
+  @EnumSource(CertificateStatus.class)
+  void serializesAllFourCertificateStatusesInAiRequest(CertificateStatus status) {
+    ClientHttpRequestFactory factory = (uri, method) -> new MockClientHttpRequest(method, uri) {
+      @Override
+      protected MockClientHttpResponse executeInternal() throws IOException {
+        var sent = new ObjectMapper().readTree(getBodyAsString());
+        assertThat(sent.path("certificateStatus").asText()).isEqualTo(status.name());
+        assertThat(sent.path("termsId").isNull()).isTrue();
+        assertThat(sent.path("question").asText()).isEqualTo("질문");
+        assertThat(sent.path("coverages").isEmpty()).isTrue();
+        return okResponse("{\"answer\":\"답변\",\"responseType\":\"TEXT\"}");
+      }
+    };
+    var restClient = RestClient.builder().baseUrl("http://ai-server")
+        .requestFactory(factory).build();
+    var request = new RagQueryRequest(UUID.randomUUID(), UUID.randomUUID(), null, null, null,
+        UUID.randomUUID(), "질문", List.of(), List.of(), false, List.of(), status);
+    assertThat(client(restClient).query(request).answer()).isEqualTo("답변");
+  }
 
   @Test
   void parsesAnswerAndSources() {
@@ -165,7 +190,8 @@ class FastApiRagQueryClientTest {
         List.of(),
         List.of(),
         false,
-        List.of());
+        List.of(),
+        polight.server.domain.chat.dto.CertificateStatus.COMPLETED);
   }
 
   private RestClient ok(String body) {

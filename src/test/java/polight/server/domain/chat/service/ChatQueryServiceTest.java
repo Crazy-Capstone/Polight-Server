@@ -23,6 +23,7 @@ import org.mockito.quality.Strictness;
 import org.springframework.dao.DataIntegrityViolationException;
 import polight.server.domain.chat.client.RagQueryClient;
 import polight.server.domain.chat.dto.ChatAnswerResponse;
+import polight.server.domain.chat.dto.CertificateStatus;
 import polight.server.domain.chat.dto.ChatQuestionRequest;
 import polight.server.domain.chat.dto.RagQueryRequest;
 import polight.server.domain.chat.dto.RagQueryResponse;
@@ -70,7 +71,7 @@ class ChatQueryServiceTest {
     given(chatMessageService.loadRecentHistory(sessionId)).willReturn(List.of());
     given(chatMessageMapper.toHistory(anyList())).willReturn(List.of());
     given(certificateContextProvider.load(userId, tripId))
-        .willReturn(new CertificateContext(termsId, List.of(), false));
+        .willReturn(new CertificateContext(termsId, List.of(), false, CertificateStatus.COMPLETED));
     given(ragQueryClient.query(any())).willReturn(answer("보상됩니다."));
     given(chatMessageMapper.toSources(any(), anyList())).willReturn(List.of());
     given(chatMessageMapper.toSuggestedContacts(any())).willReturn(List.of());
@@ -107,7 +108,7 @@ class ChatQueryServiceTest {
                 termsId,
                 List.of(new RagQueryRequest.Coverage(
                         "해외의료비", true, 30_000_000L, "KRW", "* 자기부담금 10,000")),
-                false));
+                false, CertificateStatus.COMPLETED));
 
     service.ask(userId, tripId, new ChatQuestionRequest("  병원비 얼마까지요?  "));
 
@@ -115,6 +116,7 @@ class ChatQueryServiceTest {
     verify(ragQueryClient).query(captor.capture());
     RagQueryRequest sent = captor.getValue();
 
+    assertThat(sent.certificateStatus()).isEqualTo(CertificateStatus.COMPLETED);
     assertThat(sent.userId()).isEqualTo(userId);
     assertThat(sent.tripId()).isEqualTo(tripId);
     assertThat(sent.sessionId()).isEqualTo(sessionId);
@@ -137,7 +139,7 @@ class ChatQueryServiceTest {
   @Test
   void skipsAiCallAndAnswersWithoutGroundsWhenNoTermsLinked() {
     given(certificateContextProvider.load(userId, tripId))
-        .willReturn(new CertificateContext(null, List.of(), false));
+        .willReturn(new CertificateContext(null, List.of(), false, CertificateStatus.UNREGISTERED));
     given(chatMessageService.appendAssistantMessage(sessionId, ChatQueryService.NO_TERMS_ANSWER, null))
         .willReturn(assistantMessage(ChatQueryService.NO_TERMS_ANSWER));
 
@@ -152,7 +154,7 @@ class ChatQueryServiceTest {
   @Test
   void stillSavesQuestionWhenNoTermsLinked() {
     given(certificateContextProvider.load(userId, tripId))
-        .willReturn(new CertificateContext(null, List.of(), false));
+        .willReturn(new CertificateContext(null, List.of(), false, CertificateStatus.UNREGISTERED));
     given(chatMessageService.appendAssistantMessage(sessionId, ChatQueryService.NO_TERMS_ANSWER, null))
         .willReturn(assistantMessage(ChatQueryService.NO_TERMS_ANSWER));
 
@@ -253,7 +255,7 @@ class ChatQueryServiceTest {
   @Test
   void sendsNoContactsWhenAiCallIsSkipped() {
     given(certificateContextProvider.load(userId, tripId))
-        .willReturn(new CertificateContext(null, List.of(), false));
+        .willReturn(new CertificateContext(null, List.of(), false, CertificateStatus.UNREGISTERED));
     given(chatMessageService.appendAssistantMessage(sessionId, ChatQueryService.NO_TERMS_ANSWER, null))
         .willReturn(assistantMessage(ChatQueryService.NO_TERMS_ANSWER));
 

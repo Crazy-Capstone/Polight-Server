@@ -92,7 +92,8 @@ public class ChatQueryService {
                 certificate.coverages(),
                 certificate.complete(),
                 // 특약명 필터는 AI 쪽 실측에서 효과가 확인되지 않아 보내지 않는다.
-                List.of()));
+                List.of(),
+                certificate.status()));
     long latencyMs = (System.nanoTime() - startedAt) / 1_000_000;
 
     warnIfUnsupportedResponseType(answer, sessionId);

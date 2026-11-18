@@ -2,163 +2,130 @@ package polight.server.domain.chat.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.any;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 import polight.server.domain.analysis.entity.AnalysisResult;
-import polight.server.domain.analysis.entity.CoverageItem;
-import polight.server.domain.analysis.entity.CoverageStatus;
+import polight.server.domain.analysis.entity.AnalysisStatus;
 import polight.server.domain.analysis.repository.AnalysisResultRepository;
 import polight.server.domain.analysis.repository.CoverageItemRepository;
-import polight.server.domain.chat.dto.RagQueryRequest.Coverage;
-import polight.server.domain.chat.service.CertificateContextProvider.CertificateContext;
+import polight.server.domain.chat.dto.CertificateStatus;
+import polight.server.domain.insurance.entity.DocumentKind;
+import polight.server.domain.insurance.entity.DocumentParseStatus;
+import polight.server.domain.insurance.entity.PolicyDocument;
+import polight.server.domain.insurance.repository.PolicyDocumentRepository;
 import polight.server.domain.terms.entity.PolicyTerms;
-import polight.server.domain.terms.entity.TermsVerificationStatus;
 
 @ExtendWith(MockitoExtension.class)
 class CertificateContextProviderTest {
-
+  @Mock private PolicyDocumentRepository policyDocumentRepository;
   @Mock private AnalysisResultRepository analysisResultRepository;
   @Mock private CoverageItemRepository coverageItemRepository;
-
   @InjectMocks private CertificateContextProvider provider;
-
   private final UUID userId = UUID.randomUUID();
   private final UUID tripId = UUID.randomUUID();
+  private final UUID documentId = UUID.randomUUID();
 
   @Test
-  void returnsEmptyContextWhenNoCertificateAnalysis() {
-    given(analysisResultRepository.findCompletedCertificateAnalyses(userId, tripId))
-        .willReturn(List.of());
-
-    CertificateContext context = provider.load(userId, tripId);
-
-    // 증권 분석이 없으면 AI는 약관만 보고 답한다. 질문 자체를 막지는 않는다.
+  void noCertificateIsUnregistered() {
+    given(policyDocumentRepository.findFirstByUserIdAndTripIdAndDocumentKindOrderByUploadedAtDescIdDesc(
+        userId, tripId, DocumentKind.CERTIFICATE)).willReturn(Optional.empty());
+    var context = provider.load(userId, tripId);
+    assertThat(context.status()).isEqualTo(CertificateStatus.UNREGISTERED);
     assertThat(context.coverages()).isEmpty();
-    assertThat(context.complete()).isFalse();
-    // termsId 가 비면 호출한 쪽이 AI 를 부르지 않는다.
+    assertThat(context.hasTerms()).isFalse();
+    verify(analysisResultRepository, never()).findOneByDocumentId(any());
+  }
+
+  @Test
+  void registeredCertificateInAnotherTripDoesNotBecomeUnregisteredOrLeakTerms() {
+    var document = PolicyDocument.builder().build();
+    ReflectionTestUtils.setField(document, "id", documentId);
+    given(policyDocumentRepository.findFirstByUserIdAndDocumentKindOrderByUploadedAtDescIdDesc(
+        userId, DocumentKind.CERTIFICATE)).willReturn(Optional.of(document));
+    given(analysisResultRepository.findOneByDocumentId(documentId))
+        .willReturn(Optional.of(AnalysisResult.builder().status(AnalysisStatus.COMPLETED).build()));
+    var context = provider.load(userId, tripId);
+    assertThat(context.status()).isEqualTo(CertificateStatus.COMPLETED);
+    assertThat(context.termsId()).isNull();
+    assertThat(context.coverages()).isEmpty();
+  }
+
+  @Test
+  void uploadedCertificateWithoutAnalysisIsProcessing() {
+    document(DocumentParseStatus.UPLOADED);
+    assertThat(provider.load(userId, tripId).status()).isEqualTo(CertificateStatus.PROCESSING);
+  }
+
+  @Test
+  void parseFailureWithoutAnalysisIsFailed() {
+    document(DocumentParseStatus.FAILED);
+    assertThat(provider.load(userId, tripId).status()).isEqualTo(CertificateStatus.FAILED);
+  }
+
+  @Test
+  void processingAnalysisIsNotUnregistered() {
+    analysis(AnalysisStatus.PROCESSING);
+    assertThat(provider.load(userId, tripId).status()).isEqualTo(CertificateStatus.PROCESSING);
+  }
+
+  @Test
+  void failedAnalysisIsNotUnregistered() {
+    analysis(AnalysisStatus.FAILED);
+    assertThat(provider.load(userId, tripId).status()).isEqualTo(CertificateStatus.FAILED);
+    verify(coverageItemRepository, never()).findByAnalysisResultIdOrderBySortOrderAsc(any());
+  }
+
+  @Test
+  void completedAnalysisWithoutTermsRemainsCompleted() {
+    analysis(AnalysisStatus.COMPLETED);
+    var context = provider.load(userId, tripId);
+    assertThat(context.status()).isEqualTo(CertificateStatus.COMPLETED);
     assertThat(context.hasTerms()).isFalse();
   }
 
   @Test
-  void mapsCoverageNameSubscriptionAndLimit() {
-    AnalysisResult analysis = analysis();
-    given(analysisResultRepository.findCompletedCertificateAnalyses(userId, tripId))
-        .willReturn(List.of(analysis));
-    given(coverageItemRepository.findByAnalysisResultIdOrderBySortOrderAsc(analysis.getId()))
-        .willReturn(
-            List.of(
-                coverageItem(analysis, "해외의료비", CoverageStatus.COVERED, true, 30_000_000L),
-                coverageItem(analysis, "골프용품손해", CoverageStatus.NOT_COVERED, false, null)));
-
-    List<Coverage> coverages = provider.load(userId, tripId).coverages();
-
-    assertThat(coverages)
-        .extracting(Coverage::name, Coverage::subscribed, Coverage::limitAmount)
-        .containsExactly(
-            org.assertj.core.groups.Tuple.tuple("해외의료비", true, 30_000_000L),
-            org.assertj.core.groups.Tuple.tuple("골프용품손해", false, null));
-    assertThat(coverages.get(0).limitCurrency()).isEqualTo("KRW");
-  }
-
-  @Test
-  void sendsConditionsBecauseDeductibleLivesOnlyInTheCertificate() {
-    AnalysisResult analysis = analysis();
-    given(analysisResultRepository.findCompletedCertificateAnalyses(userId, tripId))
-        .willReturn(List.of(analysis));
-    CoverageItem item = coverageItem(analysis, "휴대품손해", CoverageStatus.COVERED, true, 500_000L);
-    setField(item, "conditions", "* 자기부담금 10,000 * 물품당 최대 20만원 한도");
-    given(coverageItemRepository.findByAnalysisResultIdOrderBySortOrderAsc(analysis.getId()))
-        .willReturn(List.of(item));
-
-    List<Coverage> coverages = provider.load(userId, tripId).coverages();
-
-    // 약관은 "가입금액을 한도로"까지만 적는다. 실제 금액은 증권에 인쇄되고 여기로만 전달된다.
-    assertThat(coverages.get(0).conditions()).isEqualTo("* 자기부담금 10,000 * 물품당 최대 20만원 한도");
-  }
-
-  @Test
-  void usesMostRecentCertificateAnalysis() {
-    AnalysisResult latest = analysis();
-    AnalysisResult older = analysis();
-    // 리포지토리가 completedAt 내림차순으로 돌려준다. 최근 분석이 현재 가입 상태다.
-    given(analysisResultRepository.findCompletedCertificateAnalyses(userId, tripId))
-        .willReturn(List.of(latest, older));
-    given(coverageItemRepository.findByAnalysisResultIdOrderBySortOrderAsc(latest.getId()))
-        .willReturn(List.of(coverageItem(latest, "해외의료비", CoverageStatus.COVERED, true, 1_000L)));
-
-    assertThat(provider.load(userId, tripId).coverages()).hasSize(1);
-  }
-
-  @Test
-  void carriesMatchedTermsIdAsSearchScope() {
-    AnalysisResult analysis = analysis();
-    PolicyTerms terms =
-        PolicyTerms.builder()
-            .insurerName("메리츠화재")
-            .productName("해외여행보험")
-            .verificationStatus(TermsVerificationStatus.VERIFIED)
-            .build();
+  void completedAnalysisCarriesTermsAndCoverages() {
+    var analysis = analysis(AnalysisStatus.COMPLETED);
+    var terms = PolicyTerms.official("보험사", "상품", null, null);
     UUID termsId = UUID.randomUUID();
-    setField(terms, "id", termsId);
+    ReflectionTestUtils.setField(terms, "id", termsId);
     analysis.linkTerms(terms, "EXACT", null);
-    given(analysisResultRepository.findCompletedCertificateAnalyses(userId, tripId))
-        .willReturn(List.of(analysis));
+    var coverage = polight.server.domain.analysis.entity.CoverageItem.builder()
+        .analysisResult(analysis).title("해외의료비").covered(true)
+        .limitAmount(30000000L).limitCurrency("KRW").conditions("자기부담금 10,000").build();
     given(coverageItemRepository.findByAnalysisResultIdOrderBySortOrderAsc(analysis.getId()))
-        .willReturn(List.of());
-
-    CertificateContext context = provider.load(userId, tripId);
-
+        .willReturn(List.of(coverage));
+    var context = provider.load(userId, tripId);
+    assertThat(context.status()).isEqualTo(CertificateStatus.COMPLETED);
     assertThat(context.termsId()).isEqualTo(termsId);
-    assertThat(context.hasTerms()).isTrue();
+    assertThat(context.coverages()).hasSize(1);
+    assertThat(context.coverages().get(0).conditions()).isEqualTo("자기부담금 10,000");
+    assertThat(context.coverages().get(0).limitAmount()).isEqualTo(30000000L);
   }
 
-  @Test
-  void leavesTermsIdEmptyWhenAnalysisHasNoMatchedTerms() {
-    AnalysisResult analysis = analysis();
-    given(analysisResultRepository.findCompletedCertificateAnalyses(userId, tripId))
-        .willReturn(List.of(analysis));
-    given(coverageItemRepository.findByAnalysisResultIdOrderBySortOrderAsc(analysis.getId()))
-        .willReturn(List.of());
-
-    // 약관 매칭에 실패한 증권이다. 담보는 읽었어도 검색할 약관이 없다.
-    assertThat(provider.load(userId, tripId).hasTerms()).isFalse();
+  private void document(DocumentParseStatus status) {
+    var document = PolicyDocument.builder().parseStatus(status).build();
+    ReflectionTestUtils.setField(document, "id", documentId);
+    given(policyDocumentRepository.findFirstByUserIdAndTripIdAndDocumentKindOrderByUploadedAtDescIdDesc(
+        userId, tripId, DocumentKind.CERTIFICATE)).willReturn(Optional.of(document));
   }
 
-  private AnalysisResult analysis() {
-    AnalysisResult analysis = AnalysisResult.builder().build();
-    setField(analysis, "id", UUID.randomUUID());
+  private AnalysisResult analysis(AnalysisStatus status) {
+    document(DocumentParseStatus.UPLOADED);
+    var analysis = AnalysisResult.builder().status(status).build();
+    ReflectionTestUtils.setField(analysis, "id", UUID.randomUUID());
+    given(analysisResultRepository.findOneByDocumentId(documentId)).willReturn(Optional.of(analysis));
     return analysis;
-  }
-
-  private CoverageItem coverageItem(
-      AnalysisResult analysis,
-      String title,
-      CoverageStatus status,
-      boolean covered,
-      Long limitAmount) {
-    return CoverageItem.builder()
-        .analysisResult(analysis)
-        .title(title)
-        .coverageStatus(status)
-        .covered(covered)
-        .limitAmount(limitAmount)
-        .limitCurrency("KRW")
-        .build();
-  }
-
-  private static void setField(Object target, String name, Object value) {
-    try {
-      var field = target.getClass().getDeclaredField(name);
-      field.setAccessible(true);
-      field.set(target, value);
-    } catch (ReflectiveOperationException e) {
-      throw new IllegalStateException(e);
-    }
   }
 }
