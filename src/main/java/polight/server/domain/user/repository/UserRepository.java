@@ -14,8 +14,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
   Optional<User> findByProviderAndProviderId(Provider provider, String providerId);
 
-  boolean existsByProviderAndProviderId(Provider provider, String providerId);
-
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select u from User u where u.id = :userId")
   Optional<User> findByIdForWithdrawal(@Param("userId") UUID userId);

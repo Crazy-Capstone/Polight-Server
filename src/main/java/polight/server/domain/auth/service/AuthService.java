@@ -1,17 +1,12 @@
 package polight.server.domain.auth.service;
 
-import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import polight.server.domain.auth.client.KakaoOAuthClient;
 import polight.server.domain.auth.dto.AuthTokenResponse;
 import polight.server.domain.auth.dto.kakao.KakaoUserInfoResponse;
-import polight.server.domain.auth.exception.SignupRequiredException;
-import polight.server.domain.consent.dto.ConsentDecision;
-import polight.server.domain.consent.service.ConsentService;
 import polight.server.domain.user.entity.User;
 import polight.server.domain.user.service.UserService;
 import polight.server.global.exception.BaseException;
@@ -26,11 +21,7 @@ public class AuthService {
   private final JwtTokenProvider jwtTokenProvider;
   private final KakaoOAuthClient kakaoOAuthClient;
   private final RefreshTokenStore refreshTokenStore;
-  private final SignupTokenStore signupTokenStore;
-  private final KakaoSignupService kakaoSignupService;
-  private final ConsentService consentService;
 
-  @Transactional
   public AuthTokenResponse loginWithKakao(String authorizationCode) {
     var tokenResponse = kakaoOAuthClient.requestToken(authorizationCode);
     KakaoUserInfoResponse userInfo = kakaoOAuthClient.requestUserInfo(tokenResponse.accessToken());
@@ -51,26 +42,16 @@ public class AuthService {
     // 일이 로그인 시점 말고는 없어서, 보관하면 지킬 것만 늘고 얻는 것이 없다. 카카오 프로필을
     // 나중에 다시 읽어야 하는 기능이 생기면 그때 이 값을 저장소에 함께 넣는다.
     User user = userService.findKakaoUserForLogin(providerId, email, nickname)
-        .orElseThrow(() -> new SignupRequiredException(
-            signupTokenStore.issue(new KakaoSignupProfile(providerId, email, nickname, profileImageUrl)),
-            SignupTokenStore.EXPIRY.toSeconds()));
+        .orElseGet(() -> {
+          try {
+            return userService.createKakaoUser(providerId, email, nickname);
+          } catch (DataIntegrityViolationException e) {
+            return userService.findKakaoUserForLogin(providerId, email, nickname)
+                .orElseThrow(() -> e);
+          }
+        });
 
     return issueTokens(user, profileImageUrl);
-  }
-
-  public AuthTokenResponse signupWithKakao(String signupToken, List<ConsentDecision> decisions) {
-    consentService.validateRequiredConsents(decisions);
-    var profile = signupTokenStore.consume(signupToken);
-    User user;
-    try {
-      user = kakaoSignupService.register(profile, decisions);
-    } catch (DataIntegrityViolationException e) {
-      if (userService.kakaoUserExists(profile.providerId())) {
-        throw new BaseException(ErrorCode.KAKAO_USER_ALREADY_REGISTERED, e);
-      }
-      throw e;
-    }
-    return issueTokens(user, profile.profileImageUrl());
   }
 
   /**

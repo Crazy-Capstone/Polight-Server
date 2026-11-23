@@ -39,11 +39,6 @@ public class UserService {
             });
   }
 
-  @Transactional(readOnly = true)
-  public boolean kakaoUserExists(String providerId) {
-    return userRepository.existsByProviderAndProviderId(User.Provider.KAKAO, providerId);
-  }
-
   @Transactional
   public User createKakaoUser(String providerId, String email, String name) {
     return userRepository.saveAndFlush(User.builder()
