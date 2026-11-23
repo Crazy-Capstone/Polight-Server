@@ -1,28 +1,20 @@
 package polight.server.domain.auth.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import polight.server.domain.auth.dto.AuthTokenResponse;
 import polight.server.domain.auth.dto.KakaoLoginRequest;
-import polight.server.domain.auth.dto.KakaoSignupRequest;
 import polight.server.domain.auth.dto.RefreshTokenRequest;
-import polight.server.domain.auth.dto.SignupRequiredResponse;
-import polight.server.domain.auth.exception.SignupRequiredException;
 import polight.server.domain.auth.service.AuthService;
-import polight.server.global.exception.ErrorResponse;
 
 @RestController
 @RequiredArgsConstructor
@@ -37,39 +29,13 @@ public class AuthController {
   @Operation(
       summary = "카카오 로그인",
       description =
-          "카카오 인가 코드로 사용자를 확인합니다. 기존 회원은 서비스 토큰을 받습니다. "
-              + "신규 사용자는 409 응답의 signupToken으로 가입을 완료해야 합니다.")
-  @ApiResponse(responseCode = "200", description = "기존 회원 로그인 성공")
+          "카카오 인가 코드로 사용자를 확인하고, 신규 사용자는 자동 가입한 뒤 서비스 토큰을 발급합니다. "
+              + "동의 내역은 로그인 이후 /api/consents에서 별도로 저장합니다.")
+  @ApiResponse(responseCode = "200", description = "로그인 또는 자동 가입 성공")
   @ApiResponse(responseCode = "400", description = "INVALID_INPUT")
   @ApiResponse(responseCode = "401", description = "카카오 인증 또는 사용자 조회 실패")
-  @ApiResponse(responseCode = "409", description = "SIGNUP_REQUIRED: 가입 완료 요청 필요",
-      content = @Content(schema = @Schema(implementation = SignupRequiredResponse.class)))
   public ResponseEntity<AuthTokenResponse> kakaoLogin(@Valid @RequestBody KakaoLoginRequest request) {
     return ResponseEntity.ok(authService.loginWithKakao(request.authorizationCode()));
-  }
-
-  @PostMapping("/kakao/signup")
-  @SecurityRequirements
-  @Operation(summary = "카카오 가입 완료",
-      description = "일회용 signupToken과 동의를 제출합니다. 필수 동의 검증 후 계정과 이력을 저장하고 토큰을 발급합니다.")
-  @ApiResponse(responseCode = "200", description = "가입 완료 및 서비스 토큰 발급")
-  @ApiResponse(responseCode = "400", description = "INVALID_INPUT 또는 REQUIRED_CONSENT_NOT_AGREED",
-      content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-  @ApiResponse(responseCode = "401", description = "INVALID_SIGNUP_TOKEN: 만료, 사용 완료 또는 잘못된 토큰",
-      content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-  @ApiResponse(responseCode = "409", description = "KAKAO_USER_ALREADY_REGISTERED",
-      content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-  public ResponseEntity<AuthTokenResponse> kakaoSignup(@Valid @RequestBody KakaoSignupRequest request) {
-    return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-        .body(authService.signupWithKakao(request.signupToken(), request.decisions()));
-  }
-
-  @ExceptionHandler(SignupRequiredException.class)
-  public ResponseEntity<SignupRequiredResponse> signupRequired(SignupRequiredException exception) {
-    var code = exception.getErrorCode();
-    return ResponseEntity.status(code.getStatus()).cacheControl(CacheControl.noStore())
-        .body(new SignupRequiredResponse(
-            code.name(), code.getMessage(), exception.getSignupToken(), exception.getExpiresInSeconds()));
   }
 
   @PostMapping("/refresh")

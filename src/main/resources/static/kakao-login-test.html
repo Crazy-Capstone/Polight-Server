@@ -354,12 +354,6 @@
           });
 
           const body = await response.json();
-          if (response.status === 409 && body.code === "SIGNUP_REQUIRED") {
-            setStatus("신규 사용자: 동의 및 가입 완료 필요");
-            payloadEl.textContent = "이 테스트 페이지는 기존 회원 로그인만 확인합니다.";
-            history.replaceState(null, "", window.location.pathname);
-            return;
-          }
           if (!response.ok) {
             throw new Error(JSON.stringify(body, null, 2));
           }

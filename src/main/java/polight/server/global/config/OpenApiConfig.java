@@ -20,7 +20,7 @@ public class OpenApiConfig {
             .type(SecurityScheme.Type.HTTP)
             .scheme("bearer")
             .bearerFormat("JWT")
-            .description("카카오 로그인 또는 가입 완료 응답의 accessToken 값을 입력합니다.");
+            .description("카카오 로그인 응답의 accessToken 값을 입력합니다.");
 
     return new OpenAPI()
         .info(
