@@ -26,7 +26,8 @@ public class GlobalExceptionHandler {
       log.error("[{}] {}", errorCode.name(), errorCode.getMessage(), e);
     }
 
-    return ResponseEntity.status(errorCode.getStatus()).body(ErrorResponse.of(errorCode));
+    return ResponseEntity.status(errorCode.getStatus())
+        .body(ErrorResponse.of(errorCode, e.getFieldErrors()));
   }
 
   /** 요청 본문 검증(@Valid) 실패. 어느 필드가 왜 틀렸는지 함께 내려준다. */

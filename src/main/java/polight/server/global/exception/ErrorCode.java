@@ -28,6 +28,8 @@ public enum ErrorCode {
 
   // 사용자
   USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
+  CONSENT_NOT_FOUND(HttpStatus.NOT_FOUND, "동의 내역이 없습니다. 최초 동의를 저장해 주세요."),
+  CONSENT_ALREADY_EXISTS(HttpStatus.CONFLICT, "동의 내역이 이미 존재합니다. 수정 API를 사용해 주세요."),
 
   // 여행
   TRIP_NOT_FOUND(HttpStatus.NOT_FOUND, "여행을 찾을 수 없습니다."),

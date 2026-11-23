@@ -1,6 +1,8 @@
 package polight.server.domain.auth.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,11 +25,15 @@ public class AuthController {
   private final AuthService authService;
 
   @PostMapping("/kakao/login")
+  @SecurityRequirements
   @Operation(
       summary = "카카오 로그인",
       description =
-          "프론트엔드가 카카오 OAuth 인가 코드(authorizationCode)를 전달하면 서버가 Kakao API로 사용자 정보를 조회하고"
-              + " 서비스 JWT access token 과 리프레시 토큰을 발급합니다.")
+          "카카오 인가 코드로 사용자를 확인하고, 신규 사용자는 자동 가입한 뒤 서비스 토큰을 발급합니다. "
+              + "동의 내역은 로그인 이후 /api/consents에서 별도로 저장합니다.")
+  @ApiResponse(responseCode = "200", description = "로그인 또는 자동 가입 성공")
+  @ApiResponse(responseCode = "400", description = "INVALID_INPUT")
+  @ApiResponse(responseCode = "401", description = "카카오 인증 또는 사용자 조회 실패")
   public ResponseEntity<AuthTokenResponse> kakaoLogin(@Valid @RequestBody KakaoLoginRequest request) {
     return ResponseEntity.ok(authService.loginWithKakao(request.authorizationCode()));
   }

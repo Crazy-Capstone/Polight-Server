@@ -2,8 +2,8 @@ package polight.server.domain.auth.service;
 
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import polight.server.domain.auth.client.KakaoOAuthClient;
 import polight.server.domain.auth.dto.AuthTokenResponse;
 import polight.server.domain.auth.dto.kakao.KakaoUserInfoResponse;
@@ -22,7 +22,6 @@ public class AuthService {
   private final KakaoOAuthClient kakaoOAuthClient;
   private final RefreshTokenStore refreshTokenStore;
 
-  @Transactional
   public AuthTokenResponse loginWithKakao(String authorizationCode) {
     var tokenResponse = kakaoOAuthClient.requestToken(authorizationCode);
     KakaoUserInfoResponse userInfo = kakaoOAuthClient.requestUserInfo(tokenResponse.accessToken());
@@ -35,13 +34,22 @@ public class AuthService {
     String email = userInfo.kakaoAccount() != null ? userInfo.kakaoAccount().email() : null;
     var profile =
         userInfo.kakaoAccount() != null ? userInfo.kakaoAccount().profile() : null;
-    String nickname = profile != null ? profile.nickname() : null;
+    String nickname = profile != null && profile.nickname() != null
+        ? profile.nickname() : "카카오사용자";
     String profileImageUrl = profile != null ? profile.profileImageUrl() : null;
 
     // 카카오가 함께 내려주는 refresh_token 은 쓰지 않고 버린다. 우리가 카카오 API 를 다시 호출할
     // 일이 로그인 시점 말고는 없어서, 보관하면 지킬 것만 늘고 얻는 것이 없다. 카카오 프로필을
     // 나중에 다시 읽어야 하는 기능이 생기면 그때 이 값을 저장소에 함께 넣는다.
-    User user = userService.findOrCreateKakaoUser(providerId, email, nickname == null ? "카카오사용자" : nickname);
+    User user = userService.findKakaoUserForLogin(providerId, email, nickname)
+        .orElseGet(() -> {
+          try {
+            return userService.createKakaoUser(providerId, email, nickname);
+          } catch (DataIntegrityViolationException e) {
+            return userService.findKakaoUserForLogin(providerId, email, nickname)
+                .orElseThrow(() -> e);
+          }
+        });
 
     return issueTokens(user, profileImageUrl);
   }
