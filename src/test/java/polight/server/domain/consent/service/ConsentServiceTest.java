@@ -2,76 +2,97 @@ package polight.server.domain.consent.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
-import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static polight.server.domain.consent.entity.ConsentType.AGE_14_PLUS;
-import static polight.server.domain.consent.entity.ConsentType.HEALTH_INFORMATION;
-import static polight.server.domain.consent.entity.ConsentType.PRIVACY_COLLECTION_USE;
-import static polight.server.domain.consent.entity.ConsentType.TERMS_OF_SERVICE;
 
-import java.util.List;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import polight.server.domain.consent.dto.ConsentDecision;
+import polight.server.domain.consent.dto.ConsentCreateRequest;
+import polight.server.domain.consent.dto.ConsentUpdateRequest;
 import polight.server.domain.consent.entity.ConsentType;
-import polight.server.domain.consent.repository.ConsentHistoryRepository;
+import polight.server.domain.consent.repository.ConsentRepository;
 import polight.server.domain.user.entity.User;
 import polight.server.global.exception.BaseException;
 import polight.server.global.exception.ErrorCode;
 
 class ConsentServiceTest {
 
-  private final ConsentHistoryRepository histories = mock(ConsentHistoryRepository.class);
-  private final ConsentService service = new ConsentService(histories);
+  private final ConsentRepository repository = mock(ConsentRepository.class);
+  private final ConsentService service = new ConsentService(repository);
+  private final UUID userId = UUID.randomUUID();
 
   @Test
-  void acceptsAllRequiredDecisionsEvenWithoutOptionalDecisions() {
-    assertThatNoException().isThrownBy(() -> service.validateRequiredConsents(required()));
-    assertThatNoException().isThrownBy(() -> service.validateRequiredConsents(List.of(
-        decision(TERMS_OF_SERVICE, true), decision(PRIVACY_COLLECTION_USE, true),
-        decision(AGE_14_PLUS, true), decision(HEALTH_INFORMATION, false))));
-    verifyNoInteractions(histories);
+  void requiresAllSevenValuesBeforeCreating() {
+    assertInvalid(() -> service.create(userId, null));
+    assertInvalid(() -> service.create(userId, new ConsentCreateRequest(null)));
+    assertInvalid(() -> service.create(userId, new ConsentCreateRequest(Map.of())));
+    assertInvalid(() -> service.create(userId,
+        new ConsentCreateRequest(Map.of(ConsentType.TERMS_OF_SERVICE, true))));
+    var values = allFalse();
+    values.put(ConsentType.HEALTH_INFORMATION, null);
+    assertInvalid(() -> service.create(userId, new ConsentCreateRequest(values)));
+    verifyNoInteractions(repository);
   }
 
   @Test
-  void identifiesEveryMissingOrDeclinedRequiredType() {
+  void rejectsEmptyNullAndInvalidPatchValues() {
+    assertInvalid(() -> service.update(userId, null));
+    assertInvalid(() -> service.update(userId, new ConsentUpdateRequest(null)));
+    assertInvalid(() -> service.update(userId, new ConsentUpdateRequest(Map.of())));
+    var nullKey = new HashMap<ConsentType, Boolean>();
+    nullKey.put(null, true);
+    assertInvalid(() -> service.update(userId, new ConsentUpdateRequest(nullKey)));
+    verifyNoInteractions(repository);
+  }
+
+  @Test
+  void duplicatePostIsConflictAndDoesNotOverwrite() {
+    when(repository.lockUser(userId)).thenReturn(Optional.of(mock(User.class)));
+    when(repository.existsByUserId(userId)).thenReturn(true);
     assertThatExceptionOfType(BaseException.class)
-        .isThrownBy(() -> service.validateRequiredConsents(List.of(
-            decision(TERMS_OF_SERVICE, true), decision(AGE_14_PLUS, false))))
-        .satisfies(error -> {
-          assertThat(error.getErrorCode()).isEqualTo(ErrorCode.REQUIRED_CONSENT_NOT_AGREED);
-          assertThat(error.getFieldErrors()).containsOnlyKeys(
-              PRIVACY_COLLECTION_USE.name(), AGE_14_PLUS.name());
-        });
-    verifyNoInteractions(histories);
+        .isThrownBy(() -> service.create(userId, new ConsentCreateRequest(allFalse())))
+        .satisfies(error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.CONSENT_ALREADY_EXISTS));
   }
 
   @Test
-  void rejectsWrongVersionDuplicateTypeAndMissingDecisionBeforeWriting() {
-    User user = mock(User.class);
-    when(user.getId()).thenReturn(UUID.randomUUID());
-    List<List<ConsentDecision>> invalid = List.of(
-        List.of(new ConsentDecision(TERMS_OF_SERVICE, "old", true)),
-        List.of(new ConsentDecision(TERMS_OF_SERVICE, null, true)),
-        List.of(decision(TERMS_OF_SERVICE, true), decision(TERMS_OF_SERVICE, false)),
-        List.of(new ConsentDecision(TERMS_OF_SERVICE, "dev-v1", null)),
-        List.of(new ConsentDecision(null, "dev-v1", true)));
-    for (var decisions : invalid) {
-      assertThatExceptionOfType(BaseException.class)
-          .isThrownBy(() -> service.recordConsents(user, decisions))
-          .satisfies(error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT));
+  void missingConsentIsNotFoundForGetAndPatch() {
+    when(repository.findByUserId(userId)).thenReturn(Optional.empty());
+    when(repository.lockUser(userId)).thenReturn(Optional.of(mock(User.class)));
+    assertNotFound(() -> service.get(userId));
+    assertNotFound(() -> service.update(userId,
+        new ConsentUpdateRequest(Map.of(ConsentType.HEALTH_INFORMATION, true))));
+    verify(repository).lockUser(userId);
+  }
+
+  @Test
+  void unauthenticatedReadsAreRejectedBeforeDatabaseAccess() {
+    assertThatExceptionOfType(BaseException.class)
+        .isThrownBy(() -> service.get(null))
+        .satisfies(error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.AUTHENTICATION_REQUIRED));
+    verifyNoInteractions(repository);
+  }
+
+  private EnumMap<ConsentType, Boolean> allFalse() {
+    var values = new EnumMap<ConsentType, Boolean>(ConsentType.class);
+    for (var type : ConsentType.values()) {
+      values.put(type, false);
     }
-    verifyNoInteractions(histories);
+    return values;
   }
 
-  private static List<ConsentDecision> required() {
-    return List.of(decision(TERMS_OF_SERVICE, true), decision(PRIVACY_COLLECTION_USE, true),
-        decision(AGE_14_PLUS, true));
+  private void assertInvalid(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+    assertThatExceptionOfType(BaseException.class).isThrownBy(call)
+        .satisfies(error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT));
   }
 
-  private static ConsentDecision decision(ConsentType type, boolean agreed) {
-    return new ConsentDecision(type, "dev-v1", agreed);
+  private void assertNotFound(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+    assertThatExceptionOfType(BaseException.class).isThrownBy(call)
+        .satisfies(error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.CONSENT_NOT_FOUND));
   }
 }
