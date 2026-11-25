@@ -150,6 +150,8 @@ public class ChatMessageMapper {
         metadata == null || metadata.claimDocuments() == null
             ? List.of()
             : metadata.claimDocuments(),
+        metadata == null ? null : metadata.claimDocumentsNotice(),
+        metadata == null ? null : metadata.claimDocumentsUrl(),
         message.getCreatedAt());
   }
 
@@ -210,10 +212,14 @@ public class ChatMessageMapper {
       List<SourceResponse> sources,
       List<String> suggestedContacts,
       List<ClaimDocument> claimDocuments,
+      String claimDocumentsNotice,
+      String claimDocumentsUrl,
       long latencyMs) {
     try {
       return objectMapper.writeValueAsString(
-          new ChatMessageMetadata(sources, suggestedContacts, claimDocuments, latencyMs));
+          new ChatMessageMetadata(
+              sources, suggestedContacts, claimDocuments,
+              claimDocumentsNotice, claimDocumentsUrl, latencyMs));
     } catch (JsonProcessingException exception) {
       log.warn("대화 메타데이터를 직렬화하지 못해 비워 둡니다.", exception);
       return null;

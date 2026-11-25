@@ -91,7 +91,9 @@ public class ChatQueryService {
         chatMessageService.appendAssistantMessage(
             sessionId,
             answer.answer(),
-            chatMessageMapper.toMetadataJson(sources, suggestedContacts, claimDocuments, latencyMs));
+            chatMessageMapper.toMetadataJson(
+                sources, suggestedContacts, claimDocuments,
+                answer.claimDocumentsNotice(), answer.claimDocumentsUrl(), latencyMs));
 
     return new ChatAnswerResponse(
         sessionId,
@@ -100,7 +102,9 @@ public class ChatQueryService {
         saved.getResponseType(),
         suggestedContacts,
         sources,
-        claimDocuments);
+        claimDocuments,
+        answer.claimDocumentsNotice(),
+        answer.claimDocumentsUrl());
   }
 
   /**

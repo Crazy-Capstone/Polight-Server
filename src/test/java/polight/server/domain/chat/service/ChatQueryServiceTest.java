@@ -3,6 +3,7 @@ package polight.server.domain.chat.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -146,7 +147,7 @@ class ChatQueryServiceTest {
         .willReturn(new CertificateContext(null, List.of(), false, status));
     given(ragQueryClient.query(any())).willReturn(new RagQueryResponse(
         "State guidance", "TEXT", List.of("HOSPITAL"),
-        List.of(source(UUID.randomUUID(), UUID.randomUUID())), List.of()));
+        List.of(source(UUID.randomUUID(), UUID.randomUUID())), List.of(), null, null));
     given(chatMessageService.appendAssistantMessage(eq(sessionId), any(), any()))
         .willReturn(assistantMessage("State guidance"));
 
@@ -166,7 +167,7 @@ class ChatQueryServiceTest {
   @Test
   void storesAnswerAsTextEvenWhenAiSendsCardType() {
     given(ragQueryClient.query(any()))
-        .willReturn(new RagQueryResponse("병원 목록입니다.", "HOSPITAL_CARDS", List.of(), List.of(), List.of()));
+        .willReturn(new RagQueryResponse("병원 목록입니다.", "HOSPITAL_CARDS", List.of(), List.of(), List.of(), null, null));
 
     ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("병원 알려줘"));
 
@@ -189,7 +190,7 @@ class ChatQueryServiceTest {
 
   @Test
   void doesNotLookUpChunksWhenAiReturnsNoSources() {
-    given(ragQueryClient.query(any())).willReturn(new RagQueryResponse("모르겠습니다.", "TEXT", null, null, List.of()));
+    given(ragQueryClient.query(any())).willReturn(new RagQueryResponse("모르겠습니다.", "TEXT", null, null, List.of(), null, null));
 
     service.ask(userId, tripId, new ChatQuestionRequest("이건 뭐죠?"));
 
@@ -207,7 +208,7 @@ class ChatQueryServiceTest {
                 "TEXT",
                 List.of(),
                 List.of(source(chunkId, UUID.randomUUID())),
-                List.of()));
+                List.of(), null, null));
     given(termsChunkQueryService.findChunksIn(eq(termsId), anyList())).willReturn(List.of());
 
     service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
@@ -226,7 +227,7 @@ class ChatQueryServiceTest {
                 "TEXT",
                 List.of(),
                 List.of(source(UUID.randomUUID(), null)),
-                List.of()));
+                List.of(), null, null));
     given(termsChunkQueryService.findChunksIn(any(), anyList())).willReturn(List.of());
 
     ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
@@ -239,7 +240,7 @@ class ChatQueryServiceTest {
   @Test
   void passesSuggestedContactsFromAiToTheResponse() {
     given(ragQueryClient.query(any()))
-        .willReturn(new RagQueryResponse("경찰에 신고하세요.", "TEXT", List.of("POLICE"), List.of(), List.of()));
+        .willReturn(new RagQueryResponse("경찰에 신고하세요.", "TEXT", List.of("POLICE"), List.of(), List.of(), null, null));
     given(chatMessageMapper.toSuggestedContacts(any())).willReturn(List.of("POLICE"));
     given(chatMessageService.appendAssistantMessage(eq(sessionId), any(), any()))
         .willReturn(assistantMessage("경찰에 신고하세요."));
@@ -248,7 +249,7 @@ class ChatQueryServiceTest {
 
     assertThat(response.suggestedContacts()).containsExactly("POLICE");
     // 이력 조회도 같은 모양이어야 하므로 metadata_json 에 함께 저장한다.
-    verify(chatMessageMapper).toMetadataJson(anyList(), eq(List.of("POLICE")), anyList(), anyLong());
+    verify(chatMessageMapper).toMetadataJson(anyList(), eq(List.of("POLICE")), anyList(), nullable(String.class), nullable(String.class), anyLong());
   }
 
   @Test
@@ -256,7 +257,22 @@ class ChatQueryServiceTest {
     service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
 
     // 답변이 느릴 때 검색·생성 어느 쪽 문제인지 나누려면 저장해 둔 값이 있어야 한다.
-    verify(chatMessageMapper).toMetadataJson(anyList(), anyList(), anyList(), anyLong());
+    verify(chatMessageMapper).toMetadataJson(anyList(), anyList(), anyList(), nullable(String.class), nullable(String.class), anyLong());
+  }
+
+  @Test
+  void returnsAndStoresUnmodifiedClaimGuidance() {
+    String notice = "  General guidance  ";
+    String url = "https://example.com/claim-documents?lang=ko#documents";
+    given(ragQueryClient.query(any())).willReturn(
+        new RagQueryResponse("Answer", "TEXT", List.of(), List.of(), List.of(), notice, url));
+
+    var response = service.ask(userId, tripId, new ChatQuestionRequest("Documents?"));
+
+    assertThat(response.claimDocumentsNotice()).isEqualTo(notice);
+    assertThat(response.claimDocumentsUrl()).isEqualTo(url);
+    verify(chatMessageMapper).toMetadataJson(
+        anyList(), anyList(), anyList(), eq(notice), eq(url), anyLong());
   }
 
   @Test
@@ -273,7 +289,7 @@ class ChatQueryServiceTest {
   }
 
   private RagQueryResponse answer(String text) {
-    return new RagQueryResponse(text, "TEXT", List.of(), List.of(), List.of());
+    return new RagQueryResponse(text, "TEXT", List.of(), List.of(), List.of(), null, null);
   }
 
   private RagQueryResponse.Source source(UUID chunkId, UUID documentId) {

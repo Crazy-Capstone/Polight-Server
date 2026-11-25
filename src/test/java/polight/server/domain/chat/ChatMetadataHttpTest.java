@@ -190,7 +190,9 @@ class ChatMetadataHttpTest {
               "pageEnd": null,
               "futureField": "ignored"
             }
-          ]
+          ],
+          "claimDocumentsNotice": "  일반적인 안내입니다. 상품별 필요서류를 확인해 주세요.  ",
+          "claimDocumentsUrl": "https://example.com/claim-documents?lang=ko&from=chat#checklist"
         }
         """);
 
@@ -200,11 +202,14 @@ class ChatMetadataHttpTest {
     assertThat(answer.path("responseType").asText()).isEqualTo("TEXT");
     assertThat(answer.path("suggestedContacts")).isEqualTo(expected.path("suggestedContacts"));
     assertThat(answer.path("claimDocuments")).isEqualTo(expected.path("claimDocuments"));
+    assertThat(answer.path("claimDocumentsNotice")).isEqualTo(expected.path("claimDocumentsNotice"));
+    assertThat(answer.path("claimDocumentsUrl")).isEqualTo(expected.path("claimDocumentsUrl"));
     assertThat(answer.path("sources").get(0).path("quote").asText()).isEqualTo("Original policy quote");
 
     JsonNode stored = storedMetadata(answer);
     JsonNode history = historyMessage(answer.path("messageId").asText());
-    for (String field : new String[] {"sources", "suggestedContacts", "claimDocuments"}) {
+    for (String field : new String[] {
+        "sources", "suggestedContacts", "claimDocuments", "claimDocumentsNotice", "claimDocumentsUrl"}) {
       assertThat(stored.path(field)).isEqualTo(answer.path(field));
       assertThat(history.path(field)).isEqualTo(answer.path(field));
     }
@@ -215,7 +220,7 @@ class ChatMetadataHttpTest {
   @ParameterizedTest
   @ValueSource(strings = {
       "",
-      ", \"suggestedContacts\": null, \"claimDocuments\": null",
+      ", \"suggestedContacts\": null, \"claimDocuments\": null, \"claimDocumentsNotice\": null, \"claimDocumentsUrl\": null",
       ", \"suggestedContacts\": [], \"claimDocuments\": []"
   })
   void normalizesOmittedNullAndEmptyLists(String fields) throws Exception {
@@ -226,6 +231,9 @@ class ChatMetadataHttpTest {
     assertEmptyLists(answer);
     assertEmptyLists(storedMetadata(answer));
     assertEmptyLists(historyMessage(answer.path("messageId").asText()));
+    assertNoClaimGuidance(answer);
+    assertNoClaimGuidance(storedMetadata(answer));
+    assertNoClaimGuidance(historyMessage(answer.path("messageId").asText()));
     assertThat(AI_CALLS).hasValue(1);
   }
 
@@ -237,6 +245,7 @@ class ChatMetadataHttpTest {
     JsonNode savedAnswer = historyMessage(answer.path("messageId").asText());
     assertThat(savedAnswer.path("content")).isEqualTo(answer.path("answer"));
     assertEmptyLists(savedAnswer);
+    assertNoClaimGuidance(savedAnswer);
     assertThat(AI_CALLS).hasValue(1);
     assertThat(AI_REQUEST.get().path("certificateStatus").asText()).isEqualTo("UNREGISTERED");
 
@@ -254,6 +263,7 @@ class ChatMetadataHttpTest {
     assertThat(legacy.path("suggestedContacts").get(0).asText()).isEqualTo("EMBASSY");
     assertThat(legacy.path("sources").get(0).path("quote").asText()).isEqualTo("Old quote");
     assertThat(legacy.path("claimDocuments")).isEqualTo(mapper.createArrayNode());
+    assertNoClaimGuidance(legacy);
     assertEmptyLists(historyMessage(oldWithoutContacts.getId().toString()));
   }
 
@@ -265,6 +275,106 @@ class ChatMetadataHttpTest {
       JsonNode claimDocuments = schemas.path(schema).path("properties").path("claimDocuments");
       assertThat(claimDocuments.path("items").path("$ref").asText())
           .isEqualTo("#/components/schemas/ClaimDocument");
+      assertThat(schemas.path(schema).path("properties").path("claimDocumentsNotice")
+          .path("description").asText()).isNotBlank();
+      assertThat(schemas.path(schema).path("properties").path("claimDocumentsUrl")
+          .path("description").asText()).isNotBlank();
+    }
+  }
+
+  @Test
+  void documentsWithoutAnyEvidenceKeepNoticeAndUrlEvenWithoutLinkedTerms() throws Exception {
+    AI_RESPONSE.set("""
+        {
+          "answer": "일반적인 서류 안내입니다.",
+          "responseType": "TEXT",
+          "suggestedContacts": [],
+          "sources": [],
+          "claimDocuments": [
+            {
+              "documentName": "보험금청구서",
+              "requirementType": "REQUIRED",
+              "conditionText": null,
+              "coverageTitle": "공통",
+              "sourceChunkId": null,
+              "sourceQuote": null,
+              "sectionTitle": null,
+              "pageStart": null,
+              "pageEnd": null
+            },
+            {
+              "documentName": "도난사고증명서",
+              "requirementType": "REQUIRED",
+              "conditionText": null,
+              "coverageTitle": "휴대품손해",
+              "sourceChunkId": null,
+              "sourceQuote": null,
+              "sectionTitle": null,
+              "pageStart": null,
+              "pageEnd": null
+            }
+          ],
+          "claimDocumentsNotice": "보험사 공식 안내를 확인해 주세요.",
+          "claimDocumentsUrl": "https://example.com/claim-documents"
+        }
+        """);
+
+    JsonNode answer = ask();
+    JsonNode expected = mapper.readTree(AI_RESPONSE.get());
+    JsonNode stored = storedMetadata(answer);
+    JsonNode history = historyMessage(answer.path("messageId").asText());
+    assertThat(answer.path("claimDocuments")).hasSize(2);
+    for (String field : new String[] {"claimDocuments", "claimDocumentsNotice", "claimDocumentsUrl"}) {
+      assertThat(answer.path(field)).isEqualTo(expected.path(field));
+      assertThat(stored.path(field)).isEqualTo(expected.path(field));
+      assertThat(history.path(field)).isEqualTo(expected.path(field));
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"omitted", "null", "empty"})
+  void noticeAndUrlAreIndependentOfChecklistPresence(String listState) throws Exception {
+    ObjectNode response = mapper.createObjectNode().put("answer", "Check official guidance")
+        .put("responseType", "TEXT").put("claimDocumentsNotice", "  Notice unchanged  ")
+        .put("claimDocumentsUrl", "https://example.com/documents?value=%20#part");
+    if ("null".equals(listState)) {
+      response.putNull("claimDocuments");
+    } else if ("empty".equals(listState)) {
+      response.putArray("claimDocuments");
+    }
+    AI_RESPONSE.set(response.toString());
+
+    JsonNode answer = ask();
+    JsonNode stored = storedMetadata(answer);
+    JsonNode history = historyMessage(answer.path("messageId").asText());
+    assertThat(answer.path("claimDocuments")).isEqualTo(mapper.createArrayNode());
+    for (String field : new String[] {"claimDocumentsNotice", "claimDocumentsUrl"}) {
+      assertThat(answer.path(field)).isEqualTo(response.path(field));
+      assertThat(stored.path(field)).isEqualTo(response.path(field));
+      assertThat(history.path(field)).isEqualTo(response.path(field));
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"claimDocumentsNotice", "claimDocumentsUrl"})
+  void eitherGuidanceFieldCanBeProvidedOnItsOwn(String field) throws Exception {
+    ObjectNode response = mapper.createObjectNode().put("answer", "Guide")
+        .put("responseType", "TEXT").put(field, "Unmodified value");
+    AI_RESPONSE.set(response.toString());
+
+    var answer = ask();
+    var stored = storedMetadata(answer);
+    var history = historyMessage(answer.path("messageId").asText());
+    for (String name : new String[] {"claimDocumentsNotice", "claimDocumentsUrl"}) {
+      if (name.equals(field)) {
+        assertThat(answer.path(name).asText()).isEqualTo("Unmodified value");
+        assertThat(stored.path(name)).isEqualTo(answer.path(name));
+        assertThat(history.path(name)).isEqualTo(answer.path(name));
+      } else {
+        assertThat(answer.path(name).isNull()).isTrue();
+        assertThat(stored.path(name).isNull()).isTrue();
+        assertThat(history.path(name).isNull()).isTrue();
+      }
     }
   }
 
@@ -450,6 +560,11 @@ class ChatMetadataHttpTest {
   private void assertEmptyLists(JsonNode json) {
     assertThat(json.path("suggestedContacts")).isEqualTo(mapper.createArrayNode());
     assertThat(json.path("claimDocuments")).isEqualTo(mapper.createArrayNode());
+  }
+
+  private void assertNoClaimGuidance(JsonNode json) {
+    assertThat(json.path("claimDocumentsNotice").isNull()).isTrue();
+    assertThat(json.path("claimDocumentsUrl").isNull()).isTrue();
   }
 
   private String endpoint() {

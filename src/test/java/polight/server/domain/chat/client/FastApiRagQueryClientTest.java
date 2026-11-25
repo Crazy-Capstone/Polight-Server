@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpRequestFactory;
@@ -25,6 +26,53 @@ import polight.server.domain.chat.dto.CertificateStatus;
 import polight.server.global.exception.BaseException;
 
 class FastApiRagQueryClientTest {
+
+  @Test
+  void receivesClaimDocumentsAndGuidanceWithoutRequiringEvidence() {
+    String body = """
+        {
+          "answer": "일반적인 서류 안내",
+          "responseType": "TEXT",
+          "claimDocuments": [{
+            "documentName": "보험금청구서",
+            "requirementType": "REQUIRED",
+            "coverageTitle": "공통",
+            "sourceChunkId": null,
+            "sourceQuote": null,
+            "sectionTitle": null,
+            "pageStart": null,
+            "pageEnd": null
+          }],
+          "claimDocumentsNotice": "  일반적인 안내입니다.  ",
+          "claimDocumentsUrl": "https://example.com/claim-documents?lang=ko#required"
+        }
+        """;
+
+    var response = client(ok(body)).query(request());
+
+    assertThat(response.claimDocumentsNotice()).isEqualTo("  일반적인 안내입니다.  ");
+    assertThat(response.claimDocumentsUrl())
+        .isEqualTo("https://example.com/claim-documents?lang=ko#required");
+    assertThat(response.claimDocuments()).singleElement().satisfies(document -> {
+      assertThat(document.documentName()).isEqualTo("보험금청구서");
+      assertThat(document.sourceChunkId()).isNull();
+      assertThat(document.sourceQuote()).isNull();
+      assertThat(document.sectionTitle()).isNull();
+      assertThat(document.pageStart()).isNull();
+      assertThat(document.pageEnd()).isNull();
+    });
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", ",\"claimDocumentsNotice\":null,\"claimDocumentsUrl\":null"})
+  void acceptsOldAndNullGuidanceResponses(String fields) {
+    var response = client(ok("{\"answer\":\"Answer\",\"claimDocuments\":[]" + fields + "}")).query(request());
+
+    assertThat(response.answer()).isEqualTo("Answer");
+    assertThat(response.claimDocuments()).isEmpty();
+    assertThat(response.claimDocumentsNotice()).isNull();
+    assertThat(response.claimDocumentsUrl()).isNull();
+  }
 
   @Test
   void parsesAnswerAndSources() {

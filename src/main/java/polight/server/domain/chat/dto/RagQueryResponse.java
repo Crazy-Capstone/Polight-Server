@@ -20,7 +20,9 @@ public record RagQueryResponse(
     String responseType,
     List<String> suggestedContacts,
     List<Source> sources,
-    List<ClaimDocument> claimDocuments) {
+    List<ClaimDocument> claimDocuments,
+    String claimDocumentsNotice,
+    String claimDocumentsUrl) {
 
   /**
    * 답변 근거 1건.
