@@ -80,8 +80,9 @@ public class FastApiRagQueryClient implements RagQueryClient {
     int coverageCount = coverages == null ? 0 : coverages.size();
 
     log.info(
-        "AI 질의 전송: sessionId={}, termsId={}, 담보 {}건, coveragesComplete={}, historyTurns={}",
+        "AI 질의 전송: sessionId={}, certificateStatus={}, termsId={}, 담보 {}건, coveragesComplete={}, historyTurns={}",
         request.sessionId(),
+        request.certificateStatus(),
         request.termsId(),
         coverageCount,
         request.coveragesComplete(),

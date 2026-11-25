@@ -1,6 +1,7 @@
 package polight.server.domain.chat.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -22,6 +23,9 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.dao.DataIntegrityViolationException;
 import polight.server.domain.chat.client.RagQueryClient;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import polight.server.domain.chat.dto.CertificateStatus;
 import polight.server.domain.chat.dto.ChatAnswerResponse;
 import polight.server.domain.chat.dto.ChatQuestionRequest;
 import polight.server.domain.chat.dto.RagQueryRequest;
@@ -33,6 +37,8 @@ import polight.server.domain.chat.entity.ChatSession;
 import polight.server.domain.chat.mapper.ChatMessageMapper;
 import polight.server.domain.chat.service.CertificateContextProvider.CertificateContext;
 import polight.server.domain.terms.service.TermsChunkQueryService;
+import polight.server.global.exception.BaseException;
+import polight.server.global.exception.ErrorCode;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -70,7 +76,7 @@ class ChatQueryServiceTest {
     given(chatMessageService.loadRecentHistory(sessionId)).willReturn(List.of());
     given(chatMessageMapper.toHistory(anyList())).willReturn(List.of());
     given(certificateContextProvider.load(userId, tripId))
-        .willReturn(new CertificateContext(termsId, List.of(), false));
+        .willReturn(new CertificateContext(termsId, List.of(), false, CertificateStatus.COMPLETED));
     given(ragQueryClient.query(any())).willReturn(answer("보상됩니다."));
     given(chatMessageMapper.toSources(any(), anyList())).willReturn(List.of());
     given(chatMessageMapper.toSuggestedContacts(any())).willReturn(List.of());
@@ -107,7 +113,7 @@ class ChatQueryServiceTest {
                 termsId,
                 List.of(new RagQueryRequest.Coverage(
                         "해외의료비", true, 30_000_000L, "KRW", "* 자기부담금 10,000")),
-                false));
+                false, CertificateStatus.COMPLETED));
 
     service.ask(userId, tripId, new ChatQuestionRequest("  병원비 얼마까지요?  "));
 
@@ -121,7 +127,6 @@ class ChatQueryServiceTest {
     // 증권 분석이 매칭해 둔 약관에서만 검색한다.
     assertThat(sent.termsId()).isEqualTo(termsId);
     assertThat(sent.question()).isEqualTo("병원비 얼마까지요?");
-    // 챗봇 화면에 문서를 고르는 UI가 없다. null 이면 AI 가 여행 단위로 검색한다.
     assertThat(sent.documentId()).isNull();
     // policies 행을 만드는 경로가 없어 항상 null 이다.
     assertThat(sent.policyId()).isNull();
@@ -134,32 +139,28 @@ class ChatQueryServiceTest {
     assertThat(sent.coveragesComplete()).isFalse();
   }
 
-  @Test
-  void skipsAiCallAndAnswersWithoutGroundsWhenNoTermsLinked() {
+  @ParameterizedTest
+  @EnumSource(CertificateStatus.class)
+  void callsAiForEveryStateWithoutTermsAndDoesNotQueryChunks(CertificateStatus status) {
     given(certificateContextProvider.load(userId, tripId))
-        .willReturn(new CertificateContext(null, List.of(), false));
-    given(chatMessageService.appendAssistantMessage(sessionId, ChatQueryService.NO_TERMS_ANSWER, null))
-        .willReturn(assistantMessage(ChatQueryService.NO_TERMS_ANSWER));
+        .willReturn(new CertificateContext(null, List.of(), false, status));
+    given(ragQueryClient.query(any())).willReturn(new RagQueryResponse(
+        "State guidance", "TEXT", List.of("HOSPITAL"),
+        List.of(source(UUID.randomUUID(), UUID.randomUUID())), List.of()));
+    given(chatMessageService.appendAssistantMessage(eq(sessionId), any(), any()))
+        .willReturn(assistantMessage("State guidance"));
 
-    ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("병원비 나와요?"));
+    var response = service.ask(userId, tripId, new ChatQuestionRequest("Help"));
+    var captor = ArgumentCaptor.forClass(RagQueryRequest.class);
+    verify(ragQueryClient).query(captor.capture());
 
-    // 약관을 지목하지 않고 검색하면 사지도 않은 상품의 조항으로 "보상됩니다"가 나간다.
-    verify(ragQueryClient, org.mockito.Mockito.never()).query(any());
-    assertThat(response.answer()).isEqualTo(ChatQueryService.NO_TERMS_ANSWER);
+    assertThat(captor.getValue().certificateStatus()).isEqualTo(status);
+    assertThat(captor.getValue().termsId()).isNull();
+    assertThat(response.answer()).isEqualTo("State guidance");
     assertThat(response.sources()).isEmpty();
-  }
-
-  @Test
-  void stillSavesQuestionWhenNoTermsLinked() {
-    given(certificateContextProvider.load(userId, tripId))
-        .willReturn(new CertificateContext(null, List.of(), false));
-    given(chatMessageService.appendAssistantMessage(sessionId, ChatQueryService.NO_TERMS_ANSWER, null))
-        .willReturn(assistantMessage(ChatQueryService.NO_TERMS_ANSWER));
-
-    service.ask(userId, tripId, new ChatQuestionRequest("병원비 나와요?"));
-
-    // 질문만 사라지면 화면에서 방금 보낸 메시지가 없어진 것처럼 보인다.
-    verify(chatMessageService).appendUserMessage(sessionId, "병원비 나와요?");
+    verify(chatMessageService).appendUserMessage(sessionId, "Help");
+    verify(termsChunkQueryService, org.mockito.Mockito.never()).findChunksIn(any(), anyList());
+    verify(chatMessageMapper, org.mockito.Mockito.never()).toSources(any(), anyList());
   }
 
   @Test
@@ -251,24 +252,24 @@ class ChatQueryServiceTest {
   }
 
   @Test
-  void sendsNoContactsWhenAiCallIsSkipped() {
-    given(certificateContextProvider.load(userId, tripId))
-        .willReturn(new CertificateContext(null, List.of(), false));
-    given(chatMessageService.appendAssistantMessage(sessionId, ChatQueryService.NO_TERMS_ANSWER, null))
-        .willReturn(assistantMessage(ChatQueryService.NO_TERMS_ANSWER));
-
-    ChatAnswerResponse response = service.ask(userId, tripId, new ChatQuestionRequest("도난당했어요"));
-
-    // 사고 정황인지 판단하는 주체는 답변 LLM인데 그 호출을 건너뛰었다.
-    assertThat(response.suggestedContacts()).isEmpty();
-  }
-
-  @Test
   void measuresAiLatencyForMetadata() {
     service.ask(userId, tripId, new ChatQuestionRequest("보상돼요?"));
 
     // 답변이 느릴 때 검색·생성 어느 쪽 문제인지 나누려면 저장해 둔 값이 있어야 한다.
     verify(chatMessageMapper).toMetadataJson(anyList(), anyList(), anyList(), anyLong());
+  }
+
+  @Test
+  void aiFailureKeepsQuestionAndDoesNotSaveAnInventedAnswer() {
+    given(certificateContextProvider.load(userId, tripId))
+        .willReturn(new CertificateContext(null, List.of(), false, CertificateStatus.ANALYZING));
+    given(ragQueryClient.query(any())).willThrow(new BaseException(ErrorCode.AI_CHAT_REQUEST_FAILED));
+
+    assertThatExceptionOfType(BaseException.class)
+        .isThrownBy(() -> service.ask(userId, tripId, new ChatQuestionRequest("Help")))
+        .satisfies(error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.AI_CHAT_REQUEST_FAILED));
+    verify(chatMessageService).appendUserMessage(sessionId, "Help");
+    verify(chatMessageService, org.mockito.Mockito.never()).appendAssistantMessage(any(), any(), any());
   }
 
   private RagQueryResponse answer(String text) {

@@ -7,7 +7,12 @@ import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpRequestFactory;
@@ -16,6 +21,7 @@ import org.springframework.mock.http.client.MockClientHttpResponse;
 import org.springframework.web.client.RestClient;
 import polight.server.domain.chat.dto.RagQueryRequest;
 import polight.server.domain.chat.dto.RagQueryResponse;
+import polight.server.domain.chat.dto.CertificateStatus;
 import polight.server.global.exception.BaseException;
 
 class FastApiRagQueryClientTest {
@@ -153,6 +159,40 @@ class FastApiRagQueryClientTest {
     return new FastApiRagQueryClient(restClient, "/internal/rag/query", "internal-key");
   }
 
+  @ParameterizedTest
+  @EnumSource(CertificateStatus.class)
+  void serializesCertificateStatusAndPreservesExistingRequestFields(CertificateStatus status) {
+    var captured = new AtomicReference<JsonNode>();
+    ClientHttpRequestFactory factory = (uri, method) -> new MockClientHttpRequest(method, uri) {
+      @Override
+      protected MockClientHttpResponse executeInternal() throws IOException {
+        captured.set(new ObjectMapper().readTree(getBodyAsString()));
+        return okResponse("{\"answer\":\"State guidance\",\"responseType\":\"TEXT\"}");
+      }
+    };
+    var old = request();
+    var request = new RagQueryRequest(old.userId(), old.tripId(), null, old.documentId(),
+        old.policyId(), old.sessionId(), old.question(), old.history(), old.coverages(),
+        old.coveragesComplete(), old.clausePaths(), status);
+
+    client(RestClient.builder().baseUrl("http://ai-server").requestFactory(factory).build())
+        .query(request);
+
+    JsonNode sent = captured.get();
+    assertThat(sent.path("certificateStatus").asText()).isEqualTo(status.name());
+    assertThat(sent.path("termsId").isNull()).isTrue();
+    assertThat(sent.path("userId").asText()).isEqualTo(old.userId().toString());
+    assertThat(sent.path("tripId").asText()).isEqualTo(old.tripId().toString());
+    assertThat(sent.path("sessionId").asText()).isEqualTo(old.sessionId().toString());
+    assertThat(sent.path("question").asText()).isEqualTo(old.question());
+    assertThat(sent.has("documentId")).isTrue();
+    assertThat(sent.has("policyId")).isTrue();
+    assertThat(sent.has("history")).isTrue();
+    assertThat(sent.has("coverages")).isTrue();
+    assertThat(sent.has("coveragesComplete")).isTrue();
+    assertThat(sent.has("clausePaths")).isTrue();
+  }
+
   private RagQueryRequest request() {
     return new RagQueryRequest(
         UUID.randomUUID(),
@@ -165,7 +205,8 @@ class FastApiRagQueryClientTest {
         List.of(),
         List.of(),
         false,
-        List.of());
+        List.of(),
+        CertificateStatus.COMPLETED);
   }
 
   private RestClient ok(String body) {
