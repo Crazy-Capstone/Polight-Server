@@ -38,26 +38,26 @@ public class Consent extends BaseTimeEntity {
   @OnDelete(action = OnDeleteAction.CASCADE)
   private User user;
 
-  @Column(name = "terms_of_service", nullable = false)
-  private boolean termsOfService;
+  @Column(name = "terms_of_service")
+  private Boolean termsOfService;
 
-  @Column(name = "privacy_collection_use", nullable = false)
-  private boolean privacyCollectionUse;
+  @Column(name = "privacy_collection_use")
+  private Boolean privacyCollectionUse;
 
-  @Column(name = "overseas_transfer", nullable = false)
-  private boolean overseasTransfer;
+  @Column(name = "overseas_transfer")
+  private Boolean overseasTransfer;
 
-  @Column(name = "age_14_plus", nullable = false)
-  private boolean age14Plus;
+  @Column(name = "age_14_plus")
+  private Boolean age14Plus;
 
-  @Column(name = "policy_analysis", nullable = false)
-  private boolean policyAnalysis;
+  @Column(name = "policy_analysis")
+  private Boolean policyAnalysis;
 
-  @Column(name = "third_party_policy", nullable = false)
-  private boolean thirdPartyPolicy;
+  @Column(name = "third_party_policy")
+  private Boolean thirdPartyPolicy;
 
-  @Column(name = "health_information", nullable = false)
-  private boolean healthInformation;
+  @Column(name = "health_information")
+  private Boolean healthInformation;
 
   public Consent(User user, Map<ConsentType, Boolean> consents) {
     this.user = user;

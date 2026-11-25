@@ -35,11 +35,11 @@ public class ConsentController {
 
   @PostMapping
   @Operation(summary = "최초 동의 내역 저장",
-      description = "7개 항목의 true/false를 모두 저장합니다. 로그인과 독립적이며 동의 값으로 화면 이동이나 가입을 제한하지 않습니다. "
-          + "이미 저장된 경우 같은 요청을 다시 보내도 409입니다.")
+      description = "수집한 항목 1개 이상을 저장하고 해당 항목의 이력을 함께 기록합니다. 생략 항목은 null(미수집)입니다. "
+          + "명시적 null과 빈 요청은 거부하며, 이미 저장된 경우 같은 요청을 다시 보내도 409입니다. 로그인·화면 이동과 독립적입니다.")
   @ApiResponse(responseCode = "201", description = "저장된 동의 내역",
       content = @Content(schema = @Schema(implementation = ConsentResponse.class)))
-  @ApiResponse(responseCode = "400", description = "INVALID_INPUT: 누락, null 또는 잘못된 동의 유형",
+  @ApiResponse(responseCode = "400", description = "INVALID_INPUT: 빈 요청, 명시적 null 또는 잘못된 동의 유형",
       content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
   @ApiResponse(responseCode = "409", description = "CONSENT_ALREADY_EXISTS: 최초 동의가 이미 존재",
       content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -50,8 +50,9 @@ public class ConsentController {
 
   @PatchMapping
   @Operation(summary = "현재 동의 내역 부분 수정",
-      description = "전달한 항목만 변경합니다. 누락 항목은 유지하고 null과 빈 요청은 거부합니다. "
-          + "필수/선택 구분에 따른 접근 제한이나 회원 탈퇴는 수행하지 않습니다.")
+      description = "전달한 항목만 수집/변경하며 미수집(null) 항목도 true/false로 설정할 수 있습니다. "
+          + "생략 항목은 유지하고 명시적 null과 빈 요청은 거부합니다. 변경된 항목 또는 문서 버전이 바뀐 재동의만 이력에 기록합니다. "
+          + "접근 제한이나 회원 탈퇴는 수행하지 않습니다.")
   @ApiResponse(responseCode = "200", description = "변경된 동의 내역")
   @ApiResponse(responseCode = "400", description = "INVALID_INPUT",
       content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -64,7 +65,8 @@ public class ConsentController {
 
   @GetMapping
   @Operation(summary = "현재 동의 내역 조회",
-      description = "저장된 7개 항목과 생성/변경 시각을 반환합니다. 최초 저장 전에는 CONSENT_NOT_FOUND(404)입니다.")
+      description = "7개 항목을 모두 반환합니다. true=동의, false=명시적 미동의, null=미수집입니다. "
+          + "최초 저장 전에는 CONSENT_NOT_FOUND(404)입니다. 조회만으로 이력을 생성하지 않습니다.")
   @ApiResponse(responseCode = "200", description = "현재 동의 내역")
   @ApiResponse(responseCode = "404", description = "CONSENT_NOT_FOUND",
       content = @Content(schema = @Schema(implementation = ErrorResponse.class)))

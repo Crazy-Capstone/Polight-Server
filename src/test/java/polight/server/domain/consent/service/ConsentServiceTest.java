@@ -6,6 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -17,6 +19,7 @@ import polight.server.domain.consent.dto.ConsentCreateRequest;
 import polight.server.domain.consent.dto.ConsentUpdateRequest;
 import polight.server.domain.consent.entity.ConsentType;
 import polight.server.domain.consent.repository.ConsentRepository;
+import polight.server.domain.consent.repository.ConsentHistoryRepository;
 import polight.server.domain.user.entity.User;
 import polight.server.global.exception.BaseException;
 import polight.server.global.exception.ErrorCode;
@@ -24,20 +27,32 @@ import polight.server.global.exception.ErrorCode;
 class ConsentServiceTest {
 
   private final ConsentRepository repository = mock(ConsentRepository.class);
-  private final ConsentService service = new ConsentService(repository);
+  private final ConsentHistoryRepository histories = mock(ConsentHistoryRepository.class);
+  private final ConsentService service = new ConsentService(repository, histories, new ConsentDocumentPolicy());
   private final UUID userId = UUID.randomUUID();
 
   @Test
-  void requiresAllSevenValuesBeforeCreating() {
+  void rejectsEmptyOrExplicitNullValuesBeforeCreating() {
     assertInvalid(() -> service.create(userId, null));
     assertInvalid(() -> service.create(userId, new ConsentCreateRequest(null)));
     assertInvalid(() -> service.create(userId, new ConsentCreateRequest(Map.of())));
-    assertInvalid(() -> service.create(userId,
-        new ConsentCreateRequest(Map.of(ConsentType.TERMS_OF_SERVICE, true))));
     var values = allFalse();
     values.put(ConsentType.HEALTH_INFORMATION, null);
     assertInvalid(() -> service.create(userId, new ConsentCreateRequest(values)));
     verifyNoInteractions(repository);
+  }
+
+  @Test
+  void partialPostPreservesNullsAndWritesOnlyCollectedHistory() {
+    when(repository.lockUser(userId)).thenReturn(Optional.of(mock(User.class)));
+    when(repository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    var response = service.create(userId,
+        new ConsentCreateRequest(Map.of(ConsentType.TERMS_OF_SERVICE, false)));
+
+    assertThat(response.consents()).hasSize(7).containsEntry(ConsentType.TERMS_OF_SERVICE, false);
+    assertThat(response.consents()).containsEntry(ConsentType.HEALTH_INFORMATION, null);
+    verify(histories).saveAllAndFlush(anyList());
   }
 
   @Test
@@ -58,6 +73,19 @@ class ConsentServiceTest {
     assertThatExceptionOfType(BaseException.class)
         .isThrownBy(() -> service.create(userId, new ConsentCreateRequest(allFalse())))
         .satisfies(error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.CONSENT_ALREADY_EXISTS));
+    verifyNoInteractions(histories);
+  }
+
+  @Test
+  void currentStateSaveFailureDoesNotWriteAnyHistory() {
+    when(repository.lockUser(userId)).thenReturn(Optional.of(mock(User.class)));
+    when(repository.saveAndFlush(any()))
+        .thenThrow(new org.springframework.dao.DataIntegrityViolationException("Test state failure"));
+
+    assertThatExceptionOfType(org.springframework.dao.DataIntegrityViolationException.class)
+        .isThrownBy(() -> service.create(userId,
+            new ConsentCreateRequest(Map.of(ConsentType.TERMS_OF_SERVICE, false))));
+    verifyNoInteractions(histories);
   }
 
   @Test
