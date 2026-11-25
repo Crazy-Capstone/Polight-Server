@@ -51,6 +51,8 @@ public enum ErrorCode {
 
   // 챗봇
   CHAT_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "대화 세션을 찾을 수 없습니다."),
+  CHAT_TRIP_ALREADY_REGISTERED(HttpStatus.CONFLICT, "등록된 여행이 있습니다. 여행 목록을 갱신하고 기존 챗봇을 이용해 주세요."),
+  UNREGISTERED_CHAT_NOT_READY(HttpStatus.SERVICE_UNAVAILABLE, "무증권자 챗봇 연동이 아직 활성화되지 않았습니다."),
   AI_CHAT_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "AI 서버에서 답변을 받지 못했습니다."),
 
   /**

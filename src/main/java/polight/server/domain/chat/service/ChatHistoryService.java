@@ -34,6 +34,10 @@ public class ChatHistoryService {
   private final ChatMessageService chatMessageService;
   private final ChatMessageMapper chatMessageMapper;
 
+  public ChatHistoryResponse getUnregisteredMessages(UUID userId, Integer limit) {
+    return toResponse(chatSessionService.findUnregisteredSession(userId).orElse(null), limit);
+  }
+
   /**
    * 최근 메시지를 오래된 것부터 돌려준다.
    *
@@ -44,6 +48,10 @@ public class ChatHistoryService {
   public ChatHistoryResponse getMessages(UUID userId, UUID tripId, Integer limit) {
     // 여행 소유권은 세션 조회 쪽에서 확인한다. 남의 여행이면 TRIP_NOT_FOUND 다.
     ChatSession session = chatSessionService.findSession(userId, tripId).orElse(null);
+    return toResponse(session, limit);
+  }
+
+  private ChatHistoryResponse toResponse(ChatSession session, Integer limit) {
     if (session == null) {
       return ChatHistoryResponse.empty();
     }

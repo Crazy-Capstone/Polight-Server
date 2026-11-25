@@ -9,6 +9,9 @@ import polight.server.domain.chat.entity.ChatSession;
 import polight.server.domain.chat.repository.ChatSessionRepository;
 import polight.server.domain.trip.entity.Trip;
 import polight.server.domain.trip.service.TripService;
+import polight.server.domain.trip.repository.TripRepository;
+import polight.server.domain.user.entity.User;
+import polight.server.domain.user.service.UserService;
 import polight.server.global.exception.BaseException;
 import polight.server.global.exception.ErrorCode;
 
@@ -25,6 +28,30 @@ public class ChatSessionService {
 
   private final ChatSessionRepository chatSessionRepository;
   private final TripService tripService;
+  private final TripRepository tripRepository;
+  private final UserService userService;
+
+  @Transactional
+  public ChatSession getOrCreateUnregisteredSession(UUID userId) {
+    User user = chatSessionRepository.lockUnregisteredSessionOwner(userId)
+        .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
+    requireNoTrips(userId);
+    return chatSessionRepository.findByUserIdAndTripIsNull(userId)
+        .orElseGet(() -> chatSessionRepository.saveAndFlush(ChatSession.builder()
+            .user(user).title("미등록 사용자 상담").build()));
+  }
+
+  public Optional<ChatSession> findUnregisteredSession(UUID userId) {
+    userService.getUser(userId);
+    requireNoTrips(userId);
+    return chatSessionRepository.findByUserIdAndTripIsNull(userId);
+  }
+
+  private void requireNoTrips(UUID userId) {
+    if (tripRepository.existsByUserId(userId)) {
+      throw new BaseException(ErrorCode.CHAT_TRIP_ALREADY_REGISTERED);
+    }
+  }
 
   /**
    * 여행의 세션을 돌려준다. 없으면 만든다.

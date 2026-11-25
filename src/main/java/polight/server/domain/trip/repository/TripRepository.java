@@ -14,6 +14,8 @@ public interface TripRepository extends JpaRepository<Trip, UUID> {
 
   List<Trip> findAllByUserIdOrderByCreatedAtDesc(UUID userId);
 
+  boolean existsByUserId(UUID userId);
+
   Optional<Trip> findByIdAndUserId(UUID id, UUID userId);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
