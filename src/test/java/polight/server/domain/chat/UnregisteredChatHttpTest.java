@@ -69,8 +69,7 @@ import polight.server.global.security.JwtTokenProvider;
     "terms.matching.provider=local",
     "oauth.kakao.client-id=test-client-id",
     "oauth.kakao.redirect-uri=http://localhost/test",
-    "security.jwt.secret=test-secret-key-with-at-least-32-bytes",
-    "ai.server.unregistered-chat-mode=AI"
+    "security.jwt.secret=test-secret-key-with-at-least-32-bytes"
 })
 @AutoConfigureMockMvc
 @DirtiesContext
@@ -309,9 +308,9 @@ class UnregisteredChatHttpTest {
     var post = paths.path(ENDPOINT).path("post");
     assertThat(post.path("responses").has("200")).isTrue();
     assertThat(post.path("responses").has("409")).isTrue();
-    assertThat(post.path("responses").has("503")).isTrue();
+    assertThat(post.path("responses").has("503")).isFalse();
     assertThat(post.path("responses").has("502")).isTrue();
-    assertThat(post.path("description").asText()).contains("tripId=null", "미확정", "MOCK");
+    assertThat(post.path("description").asText()).contains("tripId=null", "미확정", "별도 활성화 설정 없이");
     assertThat(paths.path(ENDPOINT).has("get")).isTrue();
     assertThat(paths.path("/api/v1/trips/{tripId}/chat/messages").has("post")).isTrue();
   }

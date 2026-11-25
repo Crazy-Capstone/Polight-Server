@@ -74,8 +74,7 @@ import polight.server.global.security.JwtTokenProvider;
     "terms.matching.provider=local",
     "oauth.kakao.client-id=test-client-id",
     "oauth.kakao.redirect-uri=http://localhost/test",
-    "security.jwt.secret=test-secret-key-with-at-least-32-bytes",
-    "ai.server.unregistered-chat-mode=DISABLED"
+    "security.jwt.secret=test-secret-key-with-at-least-32-bytes"
 })
 @DirtiesContext
 class ChatMetadataHttpTest {
@@ -219,7 +218,7 @@ class ChatMetadataHttpTest {
   }
 
   @Test
-  void unregisteredChatIsDisabledUntilItsAiContractIsEnabled() {
+  void unregisteredChatForwardsToAiWithoutActivationSettingsAndPersistsAnswer() {
     User unregistered = users.saveAndFlush(User.builder().provider(User.Provider.KAKAO)
         .providerId(UUID.randomUUID().toString()).name("Unregistered").build());
     var headers = new HttpHeaders();
@@ -228,15 +227,23 @@ class ChatMetadataHttpTest {
     var response = http.exchange("/api/v1/chat/unregistered/messages", HttpMethod.POST,
         new HttpEntity<>("{\"question\":\"Help\"}", headers), JsonNode.class);
 
-    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
-    assertThat(response.getBody().path("code").asText()).isEqualTo("UNREGISTERED_CHAT_NOT_READY");
-    assertThat(messages.findBySessionUserIdOrderByCreatedAtDesc(unregistered.getId())).isEmpty();
-    assertThat(AI_CALLS).hasValue(0);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody().path("answer").asText()).isEqualTo("Test answer");
+    assertThat(messages.findBySessionUserIdOrderByCreatedAtDesc(unregistered.getId())).hasSize(2);
+    assertThat(AI_CALLS).hasValue(1);
+    assertThat(AI_REQUEST.get().path("certificateStatus").asText()).isEqualTo("UNREGISTERED");
+    assertThat(AI_REQUEST.get().path("userId").asText()).isEqualTo(unregistered.getId().toString());
+    assertThat(AI_REQUEST.get().path("tripId").isNull()).isTrue();
+    assertThat(AI_REQUEST.get().path("termsId").isNull()).isTrue();
+    assertThat(AI_REQUEST.get().path("coverages")).isEmpty();
+    assertThat(AI_REQUEST.get().path("coveragesComplete").asBoolean()).isFalse();
     var history = http.exchange("/api/v1/chat/unregistered/messages", HttpMethod.GET,
         new HttpEntity<>(headers), JsonNode.class);
     assertThat(history.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(history.getBody().path("sessionId").isNull()).isTrue();
-    assertThat(history.getBody().path("messages")).isEmpty();
+    assertThat(history.getBody().path("sessionId")).isEqualTo(response.getBody().path("sessionId"));
+    assertThat(history.getBody().path("messages")).hasSize(2);
+    assertThat(history.getBody().path("messages").get(1).path("content"))
+        .isEqualTo(response.getBody().path("answer"));
   }
 
   @ParameterizedTest

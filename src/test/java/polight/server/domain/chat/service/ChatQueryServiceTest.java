@@ -24,7 +24,6 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.dao.DataIntegrityViolationException;
 import polight.server.domain.chat.client.RagQueryClient;
-import polight.server.domain.chat.client.UnregisteredChatClient;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import polight.server.domain.chat.dto.CertificateStatus;
@@ -52,7 +51,6 @@ class ChatQueryServiceTest {
   @Mock private TermsChunkQueryService termsChunkQueryService;
   @Mock private RagQueryClient ragQueryClient;
   @Mock private ChatMessageMapper chatMessageMapper;
-  @Mock private UnregisteredChatClient unregisteredChatClient;
 
   @Mock private ChatSession session;
 
@@ -72,8 +70,7 @@ class ChatQueryServiceTest {
             certificateContextProvider,
             termsChunkQueryService,
             ragQueryClient,
-            chatMessageMapper,
-            unregisteredChatClient);
+            chatMessageMapper);
 
     given(session.getId()).willReturn(sessionId);
     given(chatSessionService.getOrCreateSession(userId, tripId)).willReturn(session);
@@ -102,13 +99,13 @@ class ChatQueryServiceTest {
   @Test
   void unregisteredRequestHasNoTripOrPolicyScopeAndReusesMessagePersistence() {
     given(chatSessionService.getOrCreateUnregisteredSession(userId)).willReturn(session);
-    given(unregisteredChatClient.query(any())).willReturn(answer("General guidance"));
+    given(ragQueryClient.query(any())).willReturn(answer("General guidance"));
     given(chatMessageService.appendAssistantMessage(eq(sessionId), any(), any()))
         .willReturn(assistantMessage("General guidance"));
 
     var response = service.askUnregistered(userId, new ChatQuestionRequest("  Help  "));
     var captor = ArgumentCaptor.forClass(RagQueryRequest.class);
-    verify(unregisteredChatClient).query(captor.capture());
+    verify(ragQueryClient).query(captor.capture());
     var sent = captor.getValue();
     assertThat(sent.userId()).isEqualTo(userId);
     assertThat(sent.tripId()).isNull();
@@ -122,12 +119,10 @@ class ChatQueryServiceTest {
     assertThat(response.answer()).isEqualTo("General guidance");
     verify(certificateContextProvider, org.mockito.Mockito.never()).load(any(), any());
     verify(termsChunkQueryService, org.mockito.Mockito.never()).findChunksIn(any(), anyList());
-    verify(ragQueryClient, org.mockito.Mockito.never()).query(any());
-    var order = inOrder(chatMessageService, unregisteredChatClient);
-    order.verify(unregisteredChatClient).verifyAvailable();
+    var order = inOrder(chatMessageService, ragQueryClient);
     order.verify(chatMessageService).loadRecentHistory(sessionId);
     order.verify(chatMessageService).appendUserMessage(sessionId, "Help");
-    order.verify(unregisteredChatClient).query(any());
+    order.verify(ragQueryClient).query(any());
   }
 
   @Test
@@ -138,18 +133,7 @@ class ChatQueryServiceTest {
         .isThrownBy(() -> service.askUnregistered(userId, new ChatQuestionRequest("Help")))
         .satisfies(error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.CHAT_TRIP_ALREADY_REGISTERED));
     verify(chatMessageService, org.mockito.Mockito.never()).appendUserMessage(any(), any());
-    verify(unregisteredChatClient, org.mockito.Mockito.never()).query(any());
-  }
-
-  @Test
-  void disabledUnregisteredModeDoesNotCreateSessionsOrMessages() {
-    org.mockito.Mockito.doThrow(new BaseException(ErrorCode.UNREGISTERED_CHAT_NOT_READY))
-        .when(unregisteredChatClient).verifyAvailable();
-    assertThatExceptionOfType(BaseException.class)
-        .isThrownBy(() -> service.askUnregistered(userId, new ChatQuestionRequest("Help")))
-        .satisfies(error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.UNREGISTERED_CHAT_NOT_READY));
-    verify(chatSessionService, org.mockito.Mockito.never()).getOrCreateUnregisteredSession(any());
-    verify(chatMessageService, org.mockito.Mockito.never()).appendUserMessage(any(), any());
+    verify(ragQueryClient, org.mockito.Mockito.never()).query(any());
   }
 
   @Test
