@@ -136,6 +136,7 @@ ai:
     # 10s로 충분하지만, 질의는 검색과 LLM 생성이 끝날 때까지 응답을 기다린다.
     # read-timeout을 그대로 쓰면 정상 응답을 타임아웃으로 오인해 버린다.
     rag-path: ${AI_SERVER_RAG_PATH:/internal/rag/query}
+    unregistered-chat-mode: ${AI_SERVER_UNREGISTERED_CHAT_MODE:DISABLED}
     terms-match-path: ${AI_SERVER_TERMS_MATCH_PATH:/internal/terms/match}
 
     # 매칭은 AI 쪽에서도 DB 조회 한 번이라 오래 걸릴 일이 없다. 길게 잡으면 AI 가 멈췄을 때

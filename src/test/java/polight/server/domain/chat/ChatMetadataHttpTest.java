@@ -74,7 +74,8 @@ import polight.server.global.security.JwtTokenProvider;
     "terms.matching.provider=local",
     "oauth.kakao.client-id=test-client-id",
     "oauth.kakao.redirect-uri=http://localhost/test",
-    "security.jwt.secret=test-secret-key-with-at-least-32-bytes"
+    "security.jwt.secret=test-secret-key-with-at-least-32-bytes",
+    "ai.server.unregistered-chat-mode=DISABLED"
 })
 @DirtiesContext
 class ChatMetadataHttpTest {
@@ -215,6 +216,27 @@ class ChatMetadataHttpTest {
     }
     assertThat(stored.path("latencyMs").asLong(-1)).isNotNegative();
     assertThat(AI_CALLS).hasValue(1);
+  }
+
+  @Test
+  void unregisteredChatIsDisabledUntilItsAiContractIsEnabled() {
+    User unregistered = users.saveAndFlush(User.builder().provider(User.Provider.KAKAO)
+        .providerId(UUID.randomUUID().toString()).name("Unregistered").build());
+    var headers = new HttpHeaders();
+    headers.setBearerAuth(tokens.createAccessToken(unregistered));
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    var response = http.exchange("/api/v1/chat/unregistered/messages", HttpMethod.POST,
+        new HttpEntity<>("{\"question\":\"Help\"}", headers), JsonNode.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    assertThat(response.getBody().path("code").asText()).isEqualTo("UNREGISTERED_CHAT_NOT_READY");
+    assertThat(messages.findBySessionUserIdOrderByCreatedAtDesc(unregistered.getId())).isEmpty();
+    assertThat(AI_CALLS).hasValue(0);
+    var history = http.exchange("/api/v1/chat/unregistered/messages", HttpMethod.GET,
+        new HttpEntity<>(headers), JsonNode.class);
+    assertThat(history.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(history.getBody().path("sessionId").isNull()).isTrue();
+    assertThat(history.getBody().path("messages")).isEmpty();
   }
 
   @ParameterizedTest
@@ -526,7 +548,7 @@ class ChatMetadataHttpTest {
   }
 
   private void linkTerms() {
-    var policy = terms.save(PolicyTerms.official("Test insurer", "Travel policy", null, null));
+    var policy = terms.save(PolicyTerms.official("Test insurer", "Travel policy " + trip.getId(), null, null));
     var certificate = documents.save(PolicyDocument.builder().user(owner).trip(trip)
         .documentKind(DocumentKind.CERTIFICATE).originalFilename("certificate.pdf")
         .storedFilePath("test/" + trip.getId() + ".pdf").build());

@@ -7,6 +7,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import polight.server.domain.chat.client.RagQueryClient;
+import polight.server.domain.chat.client.UnregisteredChatClient;
+import polight.server.domain.chat.dto.CertificateStatus;
 import polight.server.domain.chat.dto.ChatAnswerResponse;
 import polight.server.domain.chat.dto.ChatAnswerResponse.SourceResponse;
 import polight.server.domain.chat.dto.ChatQuestionRequest;
@@ -46,11 +48,21 @@ public class ChatQueryService {
   private final TermsChunkQueryService termsChunkQueryService;
   private final RagQueryClient ragQueryClient;
   private final ChatMessageMapper chatMessageMapper;
+  private final UnregisteredChatClient unregisteredChatClient;
 
   public ChatAnswerResponse ask(UUID userId, UUID tripId, ChatQuestionRequest request) {
+    return ask(userId, tripId, request, resolveSession(userId, tripId), false);
+  }
+
+  public ChatAnswerResponse askUnregistered(UUID userId, ChatQuestionRequest request) {
+    unregisteredChatClient.verifyAvailable();
+    return ask(userId, null, request, chatSessionService.getOrCreateUnregisteredSession(userId), true);
+  }
+
+  private ChatAnswerResponse ask(
+      UUID userId, UUID tripId, ChatQuestionRequest request, ChatSession session, boolean unregistered) {
     String question = request.question().trim();
 
-    ChatSession session = resolveSession(userId, tripId);
     UUID sessionId = session.getId();
 
     // 이력을 먼저 읽고 질문을 저장한다. 순서가 뒤바뀌면 방금 넣은 질문이 이력에도 들어가
@@ -59,27 +71,28 @@ public class ChatQueryService {
         chatMessageMapper.toHistory(chatMessageService.loadRecentHistory(sessionId));
     chatMessageService.appendUserMessage(sessionId, question);
 
-    CertificateContext certificate = certificateContextProvider.load(userId, tripId);
+    CertificateContext certificate = unregistered
+        ? CertificateContext.empty(CertificateStatus.UNREGISTERED)
+        : certificateContextProvider.load(userId, tripId);
 
     long startedAt = System.nanoTime();
-    RagQueryResponse answer =
-        ragQueryClient.query(
-            new RagQueryRequest(
-                userId,
-                tripId,
-                // 증권 분석이 매칭해 둔 약관. 여기서만 검색한다.
-                certificate.termsId(),
-                null,
-                // policies 행을 만드는 경로가 없어 항상 null 이다. AI 도 스코프로 쓰지 않는다.
-                null,
-                sessionId,
-                question,
-                history,
-                certificate.coverages(),
-                certificate.complete(),
-                // 특약명 필터는 AI 쪽 실측에서 효과가 확인되지 않아 보내지 않는다.
-                List.of(),
-                certificate.certificateStatus()));
+    RagQueryRequest query = new RagQueryRequest(
+        userId,
+        tripId,
+        // 증권 분석이 매칭해 둔 약관. 여기서만 검색한다.
+        certificate.termsId(),
+        null,
+        // policies 행을 만드는 경로가 없어 항상 null 이다. AI 도 스코프로 쓰지 않는다.
+        null,
+        sessionId,
+        question,
+        history,
+        certificate.coverages(),
+        certificate.complete(),
+        // 특약명 필터는 AI 쪽 실측에서 효과가 확인되지 않아 보내지 않는다.
+        List.of(),
+        certificate.certificateStatus());
+    RagQueryResponse answer = unregistered ? unregisteredChatClient.query(query) : ragQueryClient.query(query);
     long latencyMs = (System.nanoTime() - startedAt) / 1_000_000;
 
     warnIfUnsupportedResponseType(answer, sessionId);

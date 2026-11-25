@@ -257,6 +257,31 @@ class FastApiRagQueryClientTest {
         CertificateStatus.COMPLETED);
   }
 
+  @Test
+  void unregisteredRequestSerializesExplicitNullTripAndEmptyPolicyScope() {
+    var captured = new AtomicReference<JsonNode>();
+    ClientHttpRequestFactory factory = (uri, method) -> new MockClientHttpRequest(method, uri) {
+      @Override
+      protected MockClientHttpResponse executeInternal() throws IOException {
+        captured.set(new ObjectMapper().readTree(getBodyAsString()));
+        return okResponse("{\"answer\":\"General guidance\",\"responseType\":\"TEXT\"}");
+      }
+    };
+    var request = new RagQueryRequest(UUID.randomUUID(), null, null, null, null, UUID.randomUUID(),
+        "Help", List.of(), List.of(), false, List.of(), CertificateStatus.UNREGISTERED);
+
+    client(RestClient.builder().baseUrl("http://ai-server").requestFactory(factory).build()).query(request);
+
+    JsonNode sent = captured.get();
+    assertThat(sent.path("certificateStatus").asText()).isEqualTo("UNREGISTERED");
+    for (String field : List.of("tripId", "termsId", "documentId", "policyId")) {
+      assertThat(sent.has(field)).isTrue();
+      assertThat(sent.path(field).isNull()).isTrue();
+    }
+    assertThat(sent.path("coverages")).isEmpty();
+    assertThat(sent.path("coveragesComplete").asBoolean()).isFalse();
+  }
+
   private RestClient ok(String body) {
     return clientWith(() -> okResponse(body));
   }
