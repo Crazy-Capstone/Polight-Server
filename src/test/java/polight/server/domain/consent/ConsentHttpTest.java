@@ -98,9 +98,10 @@ class ConsentHttpTest {
         .andReturn();
     var initial = mapper.readTree(create.getResponse().getContentAsString());
     mvc.perform(post(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization)
-            .contentType(MediaType.APPLICATION_JSON).content(body(true).toString()))
-        .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.code").value("CONSENT_ALREADY_EXISTS"));
+            .contentType(MediaType.APPLICATION_JSON).content(body(false).toString()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(initial.path("id").asText()))
+        .andExpect(jsonPath("$.updatedAt").value(initial.path("updatedAt").asText()));
     var updated = mvc.perform(patch(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization)
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"consents\":{\"THIRD_PARTY_POLICY\":true}}"))
@@ -115,7 +116,7 @@ class ConsentHttpTest {
         .andExpect(status().isOk()).andReturn();
     assertThat(mapper.readTree(result.getResponse().getContentAsString()))
         .isEqualTo(mapper.readTree(updated.getResponse().getContentAsString()));
-    assertThat(histories.findByUserIdOrderByIdDesc(user.getId())).hasSize(8);
+    assertThat(histories.findByUserIdOrderByIdDesc(user.getId())).isEmpty();
   }
 
   @Test
@@ -179,8 +180,8 @@ class ConsentHttpTest {
   }
 
   @Test
-  void partialPostAndPatchPreserveUncollectedNullsAndWriteOnlySubmittedHistory() throws Exception {
-    ObjectNode request = mapper.createObjectNode().put("documentVersion", "untrusted-client-version");
+  void screenPostsMergeCurrentValuesAndPatchKeepsOnlyLastModificationTime() throws Exception {
+    ObjectNode request = mapper.createObjectNode();
     request.putObject("consents").put("TERMS_OF_SERVICE", true)
         .put("PRIVACY_COLLECTION_USE", true).put("OVERSEAS_TRANSFER", true).put("AGE_14_PLUS", false);
     var result = mvc.perform(post(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization)
@@ -193,24 +194,43 @@ class ConsentHttpTest {
       assertThat(created.path("consents").has(name)).isTrue();
       assertThat(created.path("consents").path(name).isNull()).isTrue();
     }
-    assertThat(histories.findByUserIdOrderByIdDesc(user.getId())).hasSize(4)
-        .allSatisfy(history -> assertThat(history.getDocumentVersion()).isEqualTo("dev-v1"));
+    assertThat(histories.findByUserIdOrderByIdDesc(user.getId())).isEmpty();
     var getResult = mvc.perform(get(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization))
         .andExpect(status().isOk()).andReturn();
     assertThat(mapper.readTree(getResult.getResponse().getContentAsString())).isEqualTo(created);
     assertThat(consents.findByUserId(user.getId()).orElseThrow().getHealthInformation()).isNull();
 
-    String patch = "{\"consents\":{\"POLICY_ANALYSIS\":true,\"THIRD_PARTY_POLICY\":false,\"HEALTH_INFORMATION\":true}}";
-    mvc.perform(patch(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization)
-            .contentType(MediaType.APPLICATION_JSON).content(patch))
+    String secondScreen = "{\"consents\":{\"POLICY_ANALYSIS\":true,\"THIRD_PARTY_POLICY\":false,\"HEALTH_INFORMATION\":true}}";
+    var second = mvc.perform(post(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization)
+            .contentType(MediaType.APPLICATION_JSON).content(secondScreen))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(created.path("id").asText()))
+        .andExpect(jsonPath("$.createdAt").value(created.path("createdAt").asText()))
         .andExpect(jsonPath("$.consents.POLICY_ANALYSIS").value(true))
         .andExpect(jsonPath("$.consents.THIRD_PARTY_POLICY").value(false))
         .andExpect(jsonPath("$.consents.HEALTH_INFORMATION").value(true))
-        .andExpect(jsonPath("$.consents.AGE_14_PLUS").value(false));
+        .andExpect(jsonPath("$.consents.AGE_14_PLUS").value(false)).andReturn();
+    var secondState = mapper.readTree(second.getResponse().getContentAsString());
+    assertThat(java.time.LocalDateTime.parse(secondState.path("updatedAt").asText()))
+        .isAfter(java.time.LocalDateTime.parse(created.path("updatedAt").asText()));
+    mvc.perform(post(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization)
+            .contentType(MediaType.APPLICATION_JSON).content(secondScreen))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.updatedAt").value(secondState.path("updatedAt").asText()));
     mvc.perform(patch(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization)
-            .contentType(MediaType.APPLICATION_JSON).content(patch)).andExpect(status().isOk());
-    assertThat(histories.findByUserIdOrderByIdDesc(user.getId())).hasSize(7);
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"consents\":{\"HEALTH_INFORMATION\":false}}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.consents.HEALTH_INFORMATION").value(false))
+        .andExpect(jsonPath("$.consents.TERMS_OF_SERVICE").value(true))
+        .andExpect(jsonPath("$.consents.THIRD_PARTY_POLICY").value(false));
+    var latest = mvc.perform(get(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization))
+        .andExpect(status().isOk()).andReturn();
+    var latestState = mapper.readTree(latest.getResponse().getContentAsString());
+    assertThat(latestState.path("consents").path("HEALTH_INFORMATION").asBoolean()).isFalse();
+    assertThat(java.time.LocalDateTime.parse(latestState.path("updatedAt").asText()))
+        .isAfter(java.time.LocalDateTime.parse(secondState.path("updatedAt").asText()));
+    assertThat(histories.findByUserIdOrderByIdDesc(user.getId())).isEmpty();
   }
 
   @Test
@@ -226,7 +246,7 @@ class ConsentHttpTest {
     mvc.perform(post(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization)
             .contentType(MediaType.APPLICATION_JSON).content(missing.toString()))
         .andExpect(status().isCreated());
-    assertThat(histories.findByUserIdOrderByIdDesc(user.getId())).hasSize(6);
+    assertThat(histories.findByUserIdOrderByIdDesc(user.getId())).isEmpty();
   }
 
   @Test
@@ -279,13 +299,17 @@ class ConsentHttpTest {
     assertThat(endpoint.has("patch")).isTrue();
     assertThat(endpoint.has("delete")).isFalse();
     assertThat(endpoint.path("post").path("responses").has("201")).isTrue();
-    assertThat(endpoint.path("post").path("responses").has("409")).isTrue();
+    assertThat(endpoint.path("post").path("responses").has("200")).isTrue();
+    assertThat(endpoint.path("post").path("responses").has("409")).isFalse();
+    assertThat(endpoint.path("post").path("description").asText()).contains("나누어 POST", "updatedAt");
     assertThat(endpoint.path("get").path("responses").has("404")).isTrue();
     assertThat(endpoint.path("get").path("responses").has("401")).isTrue();
     assertThat(docs.path("components").path("schemas").path("ConsentResponse")
         .path("properties").has("consents")).isTrue();
     assertThat(docs.path("components").path("schemas").path("ConsentResponse")
         .path("properties").path("consents").path("description").asText()).contains("null", "미수집");
+    assertThat(docs.path("components").path("schemas").path("ConsentResponse")
+        .path("properties").path("updatedAt").path("description").asText()).contains("마지막 변경 시각");
     assertThat(docs.path("components").path("schemas").path("ConsentCreateRequest")
         .path("properties").path("consents").has("maxProperties")).isFalse();
     assertThat(paths.has("/api/auth/kakao/signup")).isFalse();

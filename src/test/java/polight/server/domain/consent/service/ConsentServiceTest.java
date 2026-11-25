@@ -2,24 +2,23 @@ package polight.server.domain.consent.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import polight.server.domain.consent.dto.ConsentCreateRequest;
 import polight.server.domain.consent.dto.ConsentUpdateRequest;
+import polight.server.domain.consent.entity.Consent;
 import polight.server.domain.consent.entity.ConsentType;
 import polight.server.domain.consent.repository.ConsentRepository;
-import polight.server.domain.consent.repository.ConsentHistoryRepository;
 import polight.server.domain.user.entity.User;
 import polight.server.global.exception.BaseException;
 import polight.server.global.exception.ErrorCode;
@@ -27,32 +26,46 @@ import polight.server.global.exception.ErrorCode;
 class ConsentServiceTest {
 
   private final ConsentRepository repository = mock(ConsentRepository.class);
-  private final ConsentHistoryRepository histories = mock(ConsentHistoryRepository.class);
-  private final ConsentService service = new ConsentService(repository, histories, new ConsentDocumentPolicy());
+  private final ConsentService service = new ConsentService(repository);
   private final UUID userId = UUID.randomUUID();
 
   @Test
-  void rejectsEmptyOrExplicitNullValuesBeforeCreating() {
-    assertInvalid(() -> service.create(userId, null));
-    assertInvalid(() -> service.create(userId, new ConsentCreateRequest(null)));
-    assertInvalid(() -> service.create(userId, new ConsentCreateRequest(Map.of())));
-    var values = allFalse();
+  void rejectsEmptyOrExplicitNullValuesBeforeSaving() {
+    assertInvalid(() -> service.save(userId, null));
+    assertInvalid(() -> service.save(userId, new ConsentCreateRequest(null)));
+    assertInvalid(() -> service.save(userId, new ConsentCreateRequest(Map.of())));
+    var values = new HashMap<ConsentType, Boolean>();
     values.put(ConsentType.HEALTH_INFORMATION, null);
-    assertInvalid(() -> service.create(userId, new ConsentCreateRequest(values)));
+    assertInvalid(() -> service.save(userId, new ConsentCreateRequest(values)));
     verifyNoInteractions(repository);
   }
 
   @Test
-  void partialPostPreservesNullsAndWritesOnlyCollectedHistory() {
+  void partialPostCreatesCurrentStateAndPreservesUncollectedNulls() {
     when(repository.lockUser(userId)).thenReturn(Optional.of(mock(User.class)));
     when(repository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
-
-    var response = service.create(userId,
+    var result = service.save(userId,
         new ConsentCreateRequest(Map.of(ConsentType.TERMS_OF_SERVICE, false)));
 
-    assertThat(response.consents()).hasSize(7).containsEntry(ConsentType.TERMS_OF_SERVICE, false);
-    assertThat(response.consents()).containsEntry(ConsentType.HEALTH_INFORMATION, null);
-    verify(histories).saveAllAndFlush(anyList());
+    assertThat(result.created()).isTrue();
+    assertThat(result.response().consents()).hasSize(7)
+        .containsEntry(ConsentType.TERMS_OF_SERVICE, false)
+        .containsEntry(ConsentType.HEALTH_INFORMATION, null);
+  }
+
+  @Test
+  void subsequentPostUpdatesOnlySubmittedValuesInsteadOfReturningConflict() {
+    User user = mock(User.class);
+    Consent consent = new Consent(user, Map.of(ConsentType.TERMS_OF_SERVICE, true));
+    when(repository.lockUser(userId)).thenReturn(Optional.of(user));
+    when(repository.findByUserId(userId)).thenReturn(Optional.of(consent));
+    var result = service.save(userId,
+        new ConsentCreateRequest(Map.of(ConsentType.HEALTH_INFORMATION, false)));
+
+    assertThat(result.created()).isFalse();
+    assertThat(result.response().consents()).containsEntry(ConsentType.TERMS_OF_SERVICE, true)
+        .containsEntry(ConsentType.HEALTH_INFORMATION, false);
+    verify(repository).flush();
   }
 
   @Test
@@ -67,25 +80,12 @@ class ConsentServiceTest {
   }
 
   @Test
-  void duplicatePostIsConflictAndDoesNotOverwrite() {
+  void currentStateSaveFailureIsPropagated() {
     when(repository.lockUser(userId)).thenReturn(Optional.of(mock(User.class)));
-    when(repository.existsByUserId(userId)).thenReturn(true);
-    assertThatExceptionOfType(BaseException.class)
-        .isThrownBy(() -> service.create(userId, new ConsentCreateRequest(allFalse())))
-        .satisfies(error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.CONSENT_ALREADY_EXISTS));
-    verifyNoInteractions(histories);
-  }
-
-  @Test
-  void currentStateSaveFailureDoesNotWriteAnyHistory() {
-    when(repository.lockUser(userId)).thenReturn(Optional.of(mock(User.class)));
-    when(repository.saveAndFlush(any()))
-        .thenThrow(new org.springframework.dao.DataIntegrityViolationException("Test state failure"));
-
-    assertThatExceptionOfType(org.springframework.dao.DataIntegrityViolationException.class)
-        .isThrownBy(() -> service.create(userId,
+    when(repository.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("Test state failure"));
+    assertThatExceptionOfType(DataIntegrityViolationException.class)
+        .isThrownBy(() -> service.save(userId,
             new ConsentCreateRequest(Map.of(ConsentType.TERMS_OF_SERVICE, false))));
-    verifyNoInteractions(histories);
   }
 
   @Test
@@ -99,19 +99,16 @@ class ConsentServiceTest {
   }
 
   @Test
-  void unauthenticatedReadsAreRejectedBeforeDatabaseAccess() {
-    assertThatExceptionOfType(BaseException.class)
-        .isThrownBy(() -> service.get(null))
-        .satisfies(error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.AUTHENTICATION_REQUIRED));
-    verifyNoInteractions(repository);
-  }
-
-  private EnumMap<ConsentType, Boolean> allFalse() {
-    var values = new EnumMap<ConsentType, Boolean>(ConsentType.class);
-    for (var type : ConsentType.values()) {
-      values.put(type, false);
+  void unauthenticatedReadsAndWritesAreRejectedBeforeDatabaseAccess() {
+    var values = Map.of(ConsentType.TERMS_OF_SERVICE, true);
+    for (var call : java.util.List.<org.assertj.core.api.ThrowableAssert.ThrowingCallable>of(
+        () -> service.get(null),
+        () -> service.save(null, new ConsentCreateRequest(values)),
+        () -> service.update(null, new ConsentUpdateRequest(values)))) {
+      assertThatExceptionOfType(BaseException.class).isThrownBy(call)
+          .satisfies(error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.AUTHENTICATION_REQUIRED));
     }
-    return values;
+    verifyNoInteractions(repository);
   }
 
   private void assertInvalid(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
