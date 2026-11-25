@@ -41,15 +41,12 @@ public class UnregisteredChatController {
           + "사용자별 여행 없는 세션을 재사용하고 질문과 답변을 저장합니다. AI에는 certificateStatus=UNREGISTERED, "
           + "tripId=null, termsId=null, coverages=[]를 전달하며 임의 약관 검색 및 보장 단정을 금지합니다. "
           + "AI 구조화 응답 형식은 미확정이며 현재는 기존 TEXT 응답 계약을 사용합니다. "
-          + "기본 DISABLED 모드는 503이며 질문을 저장하지 않습니다. MOCK은 local/dev/test 전용 개발 응답입니다. "
-          + "AI 모드는 tripId=null 및 응답 계약 합의 후 활성화합니다. AI 실패 시 질문은 저장되며 502입니다.")
+          + "별도 활성화 설정 없이 기존 AI 질의 경로로 요청을 전달합니다. AI 실패 시 질문은 저장되며 502입니다.")
   @ApiResponse(responseCode = "200", description = "저장된 챗봇 답변",
       content = @Content(schema = @Schema(implementation = ChatAnswerResponse.class)))
   @ApiResponse(responseCode = "400", description = "INVALID_INPUT: 질문 누락, 공백 또는 2000자 초과",
       content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
   @ApiResponse(responseCode = "502", description = "AI_CHAT_REQUEST_FAILED",
-      content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-  @ApiResponse(responseCode = "503", description = "UNREGISTERED_CHAT_NOT_READY",
       content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
   public ChatAnswerResponse ask(
       @AuthenticationPrincipal UUID userId, @Valid @RequestBody ChatQuestionRequest request) {

@@ -7,7 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import polight.server.domain.chat.client.RagQueryClient;
-import polight.server.domain.chat.client.UnregisteredChatClient;
 import polight.server.domain.chat.dto.CertificateStatus;
 import polight.server.domain.chat.dto.ChatAnswerResponse;
 import polight.server.domain.chat.dto.ChatAnswerResponse.SourceResponse;
@@ -48,14 +47,12 @@ public class ChatQueryService {
   private final TermsChunkQueryService termsChunkQueryService;
   private final RagQueryClient ragQueryClient;
   private final ChatMessageMapper chatMessageMapper;
-  private final UnregisteredChatClient unregisteredChatClient;
 
   public ChatAnswerResponse ask(UUID userId, UUID tripId, ChatQuestionRequest request) {
     return ask(userId, tripId, request, resolveSession(userId, tripId), false);
   }
 
   public ChatAnswerResponse askUnregistered(UUID userId, ChatQuestionRequest request) {
-    unregisteredChatClient.verifyAvailable();
     return ask(userId, null, request, chatSessionService.getOrCreateUnregisteredSession(userId), true);
   }
 
@@ -92,7 +89,7 @@ public class ChatQueryService {
         // 특약명 필터는 AI 쪽 실측에서 효과가 확인되지 않아 보내지 않는다.
         List.of(),
         certificate.certificateStatus());
-    RagQueryResponse answer = unregistered ? unregisteredChatClient.query(query) : ragQueryClient.query(query);
+    RagQueryResponse answer = ragQueryClient.query(query);
     long latencyMs = (System.nanoTime() - startedAt) / 1_000_000;
 
     warnIfUnsupportedResponseType(answer, sessionId);
