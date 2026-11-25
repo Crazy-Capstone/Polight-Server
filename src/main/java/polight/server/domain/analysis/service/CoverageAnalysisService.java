@@ -238,7 +238,9 @@ public class CoverageAnalysisService {
                               child.getDescription(),
                               child.getSourceText(),
                               child.getSeverity().name()))
-                  .toList()));
+                  .toList(),
+              item.getTermsCoverage() == null ? null : item.getTermsCoverage().getKeyCondition(),
+              item.getPaymentType()));
     }
 
     // 고른 걱정에 해당하는 담보를 위로. 그 안에서는 원래 순서(중요도 순)를 유지하므로 안정 정렬이어야 한다.

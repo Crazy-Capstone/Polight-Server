@@ -69,6 +69,9 @@ public class AnalysisResultController {
           - `selectedConcerns[].covered` 가 false 이면 그 걱정에 해당하는 담보를 찾지 못한 것입니다.
             `coveragesComplete` 가 false 인 동안에는 "가입하지 않았다"로 단정할 수 없습니다.
           - `status` 가 COMPLETED 가 아니면 `coverages` 와 `selectedConcerns` 는 빈 목록입니다.
+          - `coverages[].keyCondition` 은 연결된 약관 규칙의 핵심 조건이며, 없으면 null입니다. 기존 `conditions` 와 별개입니다.
+          - `coverages[].paymentType` 은 증권의 지급 유형(FIXED, PROPORTIONAL, INDEMNITY, DAILY)이며, 미분류 또는 기존 데이터는 null입니다.
+          - `coverages[].exclusions[].description` 은 면책 요약이며 `sourceText` 원문과 별개입니다.
           - `termsNotice` 는 **이 분석이 어느 약관을 근거로 삼았는지 알리는 문구**입니다.
             - `null` 이면 가입하신 상품의 약관을 정확히 찾은 것이니 **아무것도 띄우지 마세요.**
             - 값이 있으면 근거가 확실하지 않다는 뜻입니다. 담보 목록 위에 그대로 보여 주세요

@@ -14,6 +14,7 @@ import polight.server.domain.analysis.dto.AnalysisCallbackRequest.CoverageItemPa
 import polight.server.domain.analysis.entity.AnalysisResult;
 import polight.server.domain.analysis.entity.CoverageItem;
 import polight.server.domain.analysis.entity.CoverageStatus;
+import polight.server.domain.analysis.entity.PaymentType;
 import polight.server.domain.analysis.event.AnalysisCompletedEvent;
 import polight.server.domain.analysis.repository.AnalysisResultRepository;
 import polight.server.domain.analysis.repository.CoverageItemRepository;
@@ -183,6 +184,7 @@ public class AnalysisCallbackService {
         .covered(isCovered(coverageStatus))
         .limitAmount(payload.limitAmount())
         .limitCurrency(payload.limitCurrency())
+        .paymentType(parsePaymentType(payload.paymentType()))
         .conditions(payload.conditions())
         .sortOrder(index)
         .build();
@@ -220,6 +222,16 @@ public class AnalysisCallbackService {
     }
   }
 
+  private PaymentType parsePaymentType(String value) {
+    if (value == null) {
+      return null;
+    }
+    try {
+      return PaymentType.valueOf(value);
+    } catch (IllegalArgumentException exception) {
+      return null;
+    }
+  }
 
   /** NOT NULL 컬럼에 들어갈 값을 미리 확인한다. 없으면 어느 필드인지 로그에 남기고 400으로 돌려준다. */
   private String require(String value, String fieldPath) {

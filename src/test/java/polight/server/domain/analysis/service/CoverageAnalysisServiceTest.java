@@ -22,6 +22,7 @@ import polight.server.domain.analysis.dto.CoverageAnalysisResponse.CoverageItemR
 import polight.server.domain.analysis.entity.AnalysisResult;
 import polight.server.domain.analysis.entity.CoverageItem;
 import polight.server.domain.analysis.entity.CoverageStatus;
+import polight.server.domain.analysis.entity.PaymentType;
 import polight.server.domain.analysis.repository.AnalysisResultRepository;
 import polight.server.domain.analysis.repository.CoverageItemRepository;
 import polight.server.domain.concern.service.ConcernCoverageMatcher;
@@ -120,6 +121,8 @@ class CoverageAnalysisServiceTest {
 
     // 가입 사실은 담보에서
     assertThat(response.limitAmount()).isEqualTo(30_000_000L);
+    assertThat(response.keyCondition()).isNull();
+    assertThat(response.paymentType()).isNull();
     assertThat(response.isCovered()).isTrue();
     // 약관 사실은 규칙에서
     assertThat(response.exclusions()).singleElement().satisfies(e -> assertThat(e.title()).isEqualTo("전문등반 중 상해"));
@@ -141,6 +144,57 @@ class CoverageAnalysisServiceTest {
     assertThat(response.requiredDocuments()).isEmpty();
     assertThat(response.subLimits()).isEmpty();
     assertThat(response.detailItems()).isEmpty();
+    assertThat(response.keyCondition()).isNull();
+    assertThat(response.paymentType()).isNull();
+  }
+
+  @Test
+  void returnsKeyConditionFromLinkedRuleWithoutReplacingCertificateConditions() {
+    PolicyTermsCoverage rule = PolicyTermsCoverage.builder()
+        .terms(terms()).title("Medical")
+        .conditions("Existing terms conditions")
+        .keyCondition("Treatment during the insured trip")
+        .build();
+    ReflectionTestUtils.setField(rule, "id", UUID.randomUUID());
+    CoverageItem item = CoverageItem.builder().analysisResult(analysis).title("Medical")
+        .limitAmount(3000L).limitCurrency("USD").limitLabel("USD 3,000")
+        .paymentType(PaymentType.INDEMNITY).conditions("Certificate conditions")
+        .build();
+    ReflectionTestUtils.setField(item, "id", UUID.randomUUID());
+    item.linkTermsCoverage(rule);
+    given(coverageItemRepository.findByAnalysisResultIdOrderBySortOrderAsc(analysis.getId()))
+        .willReturn(List.of(item));
+
+    CoverageItemResponse response = only(service.getCoverages(userId, tripId, documentId));
+
+    assertThat(response.keyCondition()).isEqualTo("Treatment during the insured trip");
+    assertThat(response.conditions()).isEqualTo("Certificate conditions");
+    assertThat(rule.getConditions()).isEqualTo("Existing terms conditions");
+    assertThat(response.paymentType()).isEqualTo(PaymentType.INDEMNITY);
+    assertThat(response.limitAmount()).isEqualTo(3000L);
+    assertThat(response.limitCurrency()).isEqualTo("USD");
+    assertThat(response.limitLabel()).isEqualTo("USD 3,000");
+  }
+
+  @Test
+  void returnsExistingExclusionDescriptionAndSourceSeparately() {
+    PolicyTermsCoverage rule = rule(terms(), "Medical", 0);
+    CoverageItem item = item("Medical", 1000L, rule);
+    ExclusionCondition exclusion = ExclusionCondition.builder().termsCoverage(rule)
+        .title("Excluded activity").description("Existing summary")
+        .sourceText("Unmodified policy text").build();
+    given(coverageItemRepository.findByAnalysisResultIdOrderBySortOrderAsc(analysis.getId()))
+        .willReturn(List.of(item));
+    given(exclusionConditionRepository.findByTermsCoverageIdInOrderBySortOrderAsc(anyCollection()))
+        .willReturn(List.of(exclusion));
+
+    var response = only(service.getCoverages(userId, tripId, documentId));
+
+    assertThat(response.exclusions()).singleElement().satisfies(value -> {
+      assertThat(value.description()).isEqualTo("Existing summary");
+      assertThat(value.sourceText()).isEqualTo("Unmodified policy text");
+      assertThat(value.title()).isEqualTo("Excluded activity");
+    });
   }
 
   @Test
