@@ -495,7 +495,7 @@ class TripDeletionIntegrationTest {
   private AnalysisCallbackRequest payload(UUID id) {
     return new AnalysisCallbackRequest(id, "COMPLETED", "summary", null, null, null, null,
         true, null, null, null, null, List.of(new CoverageItemPayload(
-            "new coverage", null, null, "COVERED", null, 100L, "KRW", null, null, null, null, null)));
+            "new coverage", null, null, "COVERED", null, 100L, "KRW", null, null, null, null, null, null)));
   }
 
   private TransactionTemplate tx() {

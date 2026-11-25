@@ -1,5 +1,6 @@
 package polight.server.domain.analysis.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -32,7 +33,10 @@ public record AnalysisCallbackRequest(
       List<DetailItemPayload> detailItems,
       List<SubLimitPayload> subLimits,
       List<RequiredDocumentPayload> requiredDocuments,
-      List<ExclusionPayload> exclusions) {}
+      List<ExclusionPayload> exclusions,
+      @Schema(description = "FIXED, PROPORTIONAL, INDEMNITY, DAILY. 누락 또는 분류 불가 값은 null로 저장",
+          example = "INDEMNITY", nullable = true)
+          String paymentType) {}
 
   public record DetailItemPayload(String title, String subtitle, Boolean isCovered) {}
 

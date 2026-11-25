@@ -45,5 +45,9 @@ public record ChatHistoryResponse(
       List<SourceResponse> sources,
       @Schema(description = "답변 당시의 청구서류. 저장된 서류가 없으면 빈 배열")
           List<ClaimDocument> claimDocuments,
+      @Schema(description = "답변 당시 저장된 청구서류 안내 문구. 이전 메시지는 null", nullable = true)
+          String claimDocumentsNotice,
+      @Schema(description = "답변 당시 저장된 청구서류 안내 URL. 이전 메시지는 null", nullable = true)
+          String claimDocumentsUrl,
       LocalDateTime createdAt) {}
 }

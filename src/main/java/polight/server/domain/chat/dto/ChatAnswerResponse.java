@@ -26,7 +26,12 @@ public record ChatAnswerResponse(
         List<String> suggestedContacts,
     List<SourceResponse> sources,
     @Schema(description = "보험금 청구서류 및 약관 근거. 안내할 서류가 없으면 빈 배열")
-        List<ClaimDocument> claimDocuments) {
+        List<ClaimDocument> claimDocuments,
+    @Schema(description = "AI가 제공한 청구서류 안내 문구. 생략된 경우 null", nullable = true)
+        String claimDocumentsNotice,
+    @Schema(description = "AI가 제공한 청구서류 안내 URL. 생략된 경우 null",
+        example = "https://example.com/claim-documents", nullable = true)
+        String claimDocumentsUrl) {
 
   /**
    * 답변 근거 1건.

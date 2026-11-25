@@ -115,7 +115,7 @@ class ConsentHttpTest {
         .andExpect(status().isOk()).andReturn();
     assertThat(mapper.readTree(result.getResponse().getContentAsString()))
         .isEqualTo(mapper.readTree(updated.getResponse().getContentAsString()));
-    assertThat(histories.findByUserIdOrderByIdDesc(user.getId())).isEmpty();
+    assertThat(histories.findByUserIdOrderByIdDesc(user.getId())).hasSize(8);
   }
 
   @Test
@@ -159,6 +159,7 @@ class ConsentHttpTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.consents.HEALTH_INFORMATION").value(true));
     assertThat(consents.findByUserId(other.getId())).isEmpty();
+    assertThat(histories.findByUserIdOrderByIdDesc(other.getId())).isEmpty();
   }
 
   @ParameterizedTest
@@ -178,17 +179,54 @@ class ConsentHttpTest {
   }
 
   @Test
-  void postRejectsMissingOrNullItemEvenWhenOtherSixArePresent() throws Exception {
+  void partialPostAndPatchPreserveUncollectedNullsAndWriteOnlySubmittedHistory() throws Exception {
+    ObjectNode request = mapper.createObjectNode().put("documentVersion", "untrusted-client-version");
+    request.putObject("consents").put("TERMS_OF_SERVICE", true)
+        .put("PRIVACY_COLLECTION_USE", true).put("OVERSEAS_TRANSFER", true).put("AGE_14_PLUS", false);
+    var result = mvc.perform(post(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization)
+            .contentType(MediaType.APPLICATION_JSON).content(request.toString()))
+        .andExpect(status().isCreated()).andReturn();
+    var created = mapper.readTree(result.getResponse().getContentAsString());
+    assertThat(created.path("consents")).hasSize(7);
+    assertThat(created.path("consents").path("AGE_14_PLUS").asBoolean(true)).isFalse();
+    for (String name : List.of("POLICY_ANALYSIS", "THIRD_PARTY_POLICY", "HEALTH_INFORMATION")) {
+      assertThat(created.path("consents").has(name)).isTrue();
+      assertThat(created.path("consents").path(name).isNull()).isTrue();
+    }
+    assertThat(histories.findByUserIdOrderByIdDesc(user.getId())).hasSize(4)
+        .allSatisfy(history -> assertThat(history.getDocumentVersion()).isEqualTo("dev-v1"));
+    var getResult = mvc.perform(get(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization))
+        .andExpect(status().isOk()).andReturn();
+    assertThat(mapper.readTree(getResult.getResponse().getContentAsString())).isEqualTo(created);
+    assertThat(consents.findByUserId(user.getId()).orElseThrow().getHealthInformation()).isNull();
+
+    String patch = "{\"consents\":{\"POLICY_ANALYSIS\":true,\"THIRD_PARTY_POLICY\":false,\"HEALTH_INFORMATION\":true}}";
+    mvc.perform(patch(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization)
+            .contentType(MediaType.APPLICATION_JSON).content(patch))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.consents.POLICY_ANALYSIS").value(true))
+        .andExpect(jsonPath("$.consents.THIRD_PARTY_POLICY").value(false))
+        .andExpect(jsonPath("$.consents.HEALTH_INFORMATION").value(true))
+        .andExpect(jsonPath("$.consents.AGE_14_PLUS").value(false));
+    mvc.perform(patch(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization)
+            .contentType(MediaType.APPLICATION_JSON).content(patch)).andExpect(status().isOk());
+    assertThat(histories.findByUserIdOrderByIdDesc(user.getId())).hasSize(7);
+  }
+
+  @Test
+  void postRejectsExplicitNullButAcceptsOmittedItems() throws Exception {
     var missing = body(true);
-    ((ObjectNode) missing.path("consents")).remove("AGE_14_PLUS");
-    mvc.perform(post(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization)
-            .contentType(MediaType.APPLICATION_JSON).content(missing.toString()))
-        .andExpect(status().isBadRequest());
     ((ObjectNode) missing.path("consents")).putNull("AGE_14_PLUS");
     mvc.perform(post(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization)
             .contentType(MediaType.APPLICATION_JSON).content(missing.toString()))
         .andExpect(status().isBadRequest());
     assertThat(consents.findByUserId(user.getId())).isEmpty();
+    assertThat(histories.findByUserIdOrderByIdDesc(user.getId())).isEmpty();
+    ((ObjectNode) missing.path("consents")).remove("AGE_14_PLUS");
+    mvc.perform(post(ENDPOINT).header(HttpHeaders.AUTHORIZATION, authorization)
+            .contentType(MediaType.APPLICATION_JSON).content(missing.toString()))
+        .andExpect(status().isCreated());
+    assertThat(histories.findByUserIdOrderByIdDesc(user.getId())).hasSize(6);
   }
 
   @Test
@@ -246,6 +284,10 @@ class ConsentHttpTest {
     assertThat(endpoint.path("get").path("responses").has("401")).isTrue();
     assertThat(docs.path("components").path("schemas").path("ConsentResponse")
         .path("properties").has("consents")).isTrue();
+    assertThat(docs.path("components").path("schemas").path("ConsentResponse")
+        .path("properties").path("consents").path("description").asText()).contains("null", "미수집");
+    assertThat(docs.path("components").path("schemas").path("ConsentCreateRequest")
+        .path("properties").path("consents").has("maxProperties")).isFalse();
     assertThat(paths.has("/api/auth/kakao/signup")).isFalse();
     assertThat(paths.has("/api/v1/users/me/consents")).isFalse();
   }

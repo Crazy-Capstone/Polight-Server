@@ -1,9 +1,11 @@
 package polight.server.domain.analysis.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.UUID;
 import polight.server.domain.analysis.entity.AnalysisStatus;
 import polight.server.domain.analysis.entity.CoverageStatus;
+import polight.server.domain.analysis.entity.PaymentType;
 
 /**
  * 보장 확인 화면에 내려주는 분석 결과.
@@ -51,7 +53,13 @@ public record CoverageAnalysisResponse(
       List<DetailItemResponse> detailItems,
       List<SubLimitResponse> subLimits,
       List<RequiredDocumentResponse> requiredDocuments,
-      List<ExclusionResponse> exclusions) {}
+      List<ExclusionResponse> exclusions,
+      @Schema(description = "연결된 약관 규칙의 핵심 조건. 규칙이 없거나 값이 없으면 null",
+          example = "항공편이 4시간 이상 지연된 경우", nullable = true)
+          String keyCondition,
+      @Schema(description = "증권에서 추출한 지급 유형. 미분류 또는 기존 데이터는 null",
+          example = "INDEMNITY", nullable = true)
+          PaymentType paymentType) {}
 
   public record DetailItemResponse(String title, String subtitle, boolean isCovered) {}
 

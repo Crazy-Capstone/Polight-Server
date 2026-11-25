@@ -7,7 +7,13 @@ import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpRequestFactory;
@@ -16,9 +22,57 @@ import org.springframework.mock.http.client.MockClientHttpResponse;
 import org.springframework.web.client.RestClient;
 import polight.server.domain.chat.dto.RagQueryRequest;
 import polight.server.domain.chat.dto.RagQueryResponse;
+import polight.server.domain.chat.dto.CertificateStatus;
 import polight.server.global.exception.BaseException;
 
 class FastApiRagQueryClientTest {
+
+  @Test
+  void receivesClaimDocumentsAndGuidanceWithoutRequiringEvidence() {
+    String body = """
+        {
+          "answer": "일반적인 서류 안내",
+          "responseType": "TEXT",
+          "claimDocuments": [{
+            "documentName": "보험금청구서",
+            "requirementType": "REQUIRED",
+            "coverageTitle": "공통",
+            "sourceChunkId": null,
+            "sourceQuote": null,
+            "sectionTitle": null,
+            "pageStart": null,
+            "pageEnd": null
+          }],
+          "claimDocumentsNotice": "  일반적인 안내입니다.  ",
+          "claimDocumentsUrl": "https://example.com/claim-documents?lang=ko#required"
+        }
+        """;
+
+    var response = client(ok(body)).query(request());
+
+    assertThat(response.claimDocumentsNotice()).isEqualTo("  일반적인 안내입니다.  ");
+    assertThat(response.claimDocumentsUrl())
+        .isEqualTo("https://example.com/claim-documents?lang=ko#required");
+    assertThat(response.claimDocuments()).singleElement().satisfies(document -> {
+      assertThat(document.documentName()).isEqualTo("보험금청구서");
+      assertThat(document.sourceChunkId()).isNull();
+      assertThat(document.sourceQuote()).isNull();
+      assertThat(document.sectionTitle()).isNull();
+      assertThat(document.pageStart()).isNull();
+      assertThat(document.pageEnd()).isNull();
+    });
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", ",\"claimDocumentsNotice\":null,\"claimDocumentsUrl\":null"})
+  void acceptsOldAndNullGuidanceResponses(String fields) {
+    var response = client(ok("{\"answer\":\"Answer\",\"claimDocuments\":[]" + fields + "}")).query(request());
+
+    assertThat(response.answer()).isEqualTo("Answer");
+    assertThat(response.claimDocuments()).isEmpty();
+    assertThat(response.claimDocumentsNotice()).isNull();
+    assertThat(response.claimDocumentsUrl()).isNull();
+  }
 
   @Test
   void parsesAnswerAndSources() {
@@ -153,6 +207,40 @@ class FastApiRagQueryClientTest {
     return new FastApiRagQueryClient(restClient, "/internal/rag/query", "internal-key");
   }
 
+  @ParameterizedTest
+  @EnumSource(CertificateStatus.class)
+  void serializesCertificateStatusAndPreservesExistingRequestFields(CertificateStatus status) {
+    var captured = new AtomicReference<JsonNode>();
+    ClientHttpRequestFactory factory = (uri, method) -> new MockClientHttpRequest(method, uri) {
+      @Override
+      protected MockClientHttpResponse executeInternal() throws IOException {
+        captured.set(new ObjectMapper().readTree(getBodyAsString()));
+        return okResponse("{\"answer\":\"State guidance\",\"responseType\":\"TEXT\"}");
+      }
+    };
+    var old = request();
+    var request = new RagQueryRequest(old.userId(), old.tripId(), null, old.documentId(),
+        old.policyId(), old.sessionId(), old.question(), old.history(), old.coverages(),
+        old.coveragesComplete(), old.clausePaths(), status);
+
+    client(RestClient.builder().baseUrl("http://ai-server").requestFactory(factory).build())
+        .query(request);
+
+    JsonNode sent = captured.get();
+    assertThat(sent.path("certificateStatus").asText()).isEqualTo(status.name());
+    assertThat(sent.path("termsId").isNull()).isTrue();
+    assertThat(sent.path("userId").asText()).isEqualTo(old.userId().toString());
+    assertThat(sent.path("tripId").asText()).isEqualTo(old.tripId().toString());
+    assertThat(sent.path("sessionId").asText()).isEqualTo(old.sessionId().toString());
+    assertThat(sent.path("question").asText()).isEqualTo(old.question());
+    assertThat(sent.has("documentId")).isTrue();
+    assertThat(sent.has("policyId")).isTrue();
+    assertThat(sent.has("history")).isTrue();
+    assertThat(sent.has("coverages")).isTrue();
+    assertThat(sent.has("coveragesComplete")).isTrue();
+    assertThat(sent.has("clausePaths")).isTrue();
+  }
+
   private RagQueryRequest request() {
     return new RagQueryRequest(
         UUID.randomUUID(),
@@ -165,7 +253,8 @@ class FastApiRagQueryClientTest {
         List.of(),
         List.of(),
         false,
-        List.of());
+        List.of(),
+        CertificateStatus.COMPLETED);
   }
 
   private RestClient ok(String body) {

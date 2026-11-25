@@ -18,4 +18,6 @@ public record ChatMessageMetadata(
     List<SourceResponse> sources,
     List<String> suggestedContacts,
     List<ClaimDocument> claimDocuments,
+    String claimDocumentsNotice,
+    String claimDocumentsUrl,
     long latencyMs) {}

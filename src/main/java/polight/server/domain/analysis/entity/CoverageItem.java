@@ -78,6 +78,10 @@ public class CoverageItem extends BaseTimeEntity {
   @Column(name = "limit_currency", length = 10)
   private String limitCurrency = "KRW";
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "payment_type", length = 30)
+  private PaymentType paymentType;
+
   @Column(columnDefinition = "TEXT")
   private String conditions;
 
@@ -95,6 +99,7 @@ public class CoverageItem extends BaseTimeEntity {
       CoverageStatus coverageStatus,
       Long limitAmount,
       String limitCurrency,
+      PaymentType paymentType,
       String conditions,
       Integer sortOrder) {
     this.analysisResult = Objects.requireNonNull(analysisResult, "analysisResult는 필수입니다.");
@@ -106,6 +111,7 @@ public class CoverageItem extends BaseTimeEntity {
     this.coverageStatus = coverageStatus == null ? CoverageStatus.NOT_COVERED : coverageStatus;
     this.limitAmount = limitAmount;
     this.limitCurrency = limitCurrency == null ? "KRW" : limitCurrency;
+    this.paymentType = paymentType;
     this.conditions = conditions;
     this.sortOrder = sortOrder == null ? 0 : sortOrder;
   }

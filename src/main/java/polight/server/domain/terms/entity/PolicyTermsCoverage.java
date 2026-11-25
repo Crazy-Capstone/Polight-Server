@@ -75,6 +75,9 @@ public class PolicyTermsCoverage extends BaseTimeEntity {
   @Column(columnDefinition = "TEXT")
   private String conditions;
 
+  @Column(name = "key_condition", columnDefinition = "TEXT")
+  private String keyCondition;
+
   @Column(name = "sort_order", nullable = false)
   private int sortOrder;
 
@@ -86,6 +89,7 @@ public class PolicyTermsCoverage extends BaseTimeEntity {
       String category,
       String limitLabel,
       String conditions,
+      String keyCondition,
       Integer sortOrder) {
     this.terms = Objects.requireNonNull(terms, "terms는 필수입니다.");
     this.title = Objects.requireNonNull(title, "title은 필수입니다.");
@@ -93,6 +97,7 @@ public class PolicyTermsCoverage extends BaseTimeEntity {
     this.category = category;
     this.limitLabel = limitLabel;
     this.conditions = conditions;
+    this.keyCondition = keyCondition;
     this.sortOrder = sortOrder == null ? 0 : sortOrder;
   }
 
