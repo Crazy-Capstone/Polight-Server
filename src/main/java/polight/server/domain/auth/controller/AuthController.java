@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import polight.server.domain.auth.dto.AuthTokenResponse;
+import polight.server.domain.auth.dto.AppleLoginRequest;
 import polight.server.domain.auth.dto.KakaoLoginRequest;
 import polight.server.domain.auth.dto.RefreshTokenRequest;
 import polight.server.domain.auth.service.AuthService;
@@ -23,6 +24,24 @@ import polight.server.domain.auth.service.AuthService;
 public class AuthController {
 
   private final AuthService authService;
+
+  @PostMapping("/apple/login")
+  @SecurityRequirements
+  @Operation(summary = "Apple 로그인",
+      description = "iOS 네이티브 Apple Identity Token과 일회용 Authorization Code를 검증합니다. "
+          + "audience는 com.polight.app이며 nonce는 Apple에 보낸 SHA-256 소문자 hex의 원본입니다. "
+          + "신규 사용자는 자동 가입하고 기존 AuthTokenResponse로 서비스 토큰을 발급합니다. "
+          + "name은 선택값이며 생략 시 기존 이름을 유지합니다. profileImageUrl은 항상 null입니다. "
+          + "이메일은 요청받거나 저장하지 않고 카카오 계정과 병합하지 않습니다. "
+          + "동의 내역은 로그인 이후 /api/consents에서 별도로 저장합니다.")
+  @ApiResponse(responseCode = "200", description = "로그인 또는 자동 가입 성공")
+  @ApiResponse(responseCode = "400", description = "INVALID_INPUT")
+  @ApiResponse(responseCode = "401", description = "APPLE_IDENTITY_TOKEN_INVALID 또는 APPLE_AUTHORIZATION_CODE_INVALID")
+  @ApiResponse(responseCode = "502", description = "APPLE_TOKEN_EXCHANGE_FAILED: Apple 응답 계약 오류")
+  @ApiResponse(responseCode = "503", description = "APPLE_SERVICE_UNAVAILABLE 또는 APPLE_CONFIGURATION_ERROR")
+  public ResponseEntity<AuthTokenResponse> appleLogin(@Valid @RequestBody AppleLoginRequest request) {
+    return ResponseEntity.ok(authService.loginWithApple(request));
+  }
 
   @PostMapping("/kakao/login")
   @SecurityRequirements
