@@ -1,5 +1,6 @@
 package polight.server.domain.user.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -23,7 +24,8 @@ import polight.server.domain.common.entity.BaseTimeEntity;
 public class User extends BaseTimeEntity {
 
   public enum Provider {
-    KAKAO
+    KAKAO,
+    APPLE
   }
 
   @Id
@@ -61,6 +63,10 @@ public class User extends BaseTimeEntity {
   @Column(name = "provider_id", nullable = false, length = 100)
   private String providerId;
 
+  @JsonIgnore
+  @Column(name = "apple_refresh_token_encrypted", columnDefinition = "TEXT")
+  private String appleRefreshTokenEncrypted;
+
   @Builder
   public User(
       String email,
@@ -88,6 +94,18 @@ public class User extends BaseTimeEntity {
   public void updateProfile(String email, String name) {
     this.email = email;
     this.name = name;
+  }
+
+  public void updateAppleCredentials(String name, String encryptedRefreshToken) {
+    if (provider != Provider.APPLE) {
+      throw new IllegalStateException("Apple credentials require an Apple account");
+    }
+    if (name != null && !name.isBlank() && !name.trim().equals(this.name)) {
+      this.name = name.trim();
+    }
+    if (encryptedRefreshToken != null) {
+      this.appleRefreshTokenEncrypted = encryptedRefreshToken;
+    }
   }
 
   public void updateProfile(

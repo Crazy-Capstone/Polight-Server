@@ -24,6 +24,12 @@ public enum ErrorCode {
   KAKAO_TOKEN_REQUEST_FAILED(HttpStatus.UNAUTHORIZED, "카카오 토큰 발급에 실패했습니다."),
   KAKAO_USER_INFO_REQUEST_FAILED(HttpStatus.UNAUTHORIZED, "카카오 사용자 정보 조회에 실패했습니다."),
   KAKAO_USER_ID_NOT_FOUND(HttpStatus.UNAUTHORIZED, "카카오 사용자 식별자(providerId)가 없습니다."),
+  APPLE_IDENTITY_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "Apple 인증 정보가 유효하지 않습니다."),
+  APPLE_AUTHORIZATION_CODE_INVALID(HttpStatus.UNAUTHORIZED, "Apple 인증 코드가 유효하지 않거나 이미 사용되었습니다."),
+  APPLE_TOKEN_EXCHANGE_FAILED(HttpStatus.BAD_GATEWAY, "Apple 인증 응답을 확인하지 못했습니다."),
+  APPLE_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Apple 인증 서버에 일시적으로 연결할 수 없습니다."),
+  APPLE_CONFIGURATION_ERROR(HttpStatus.SERVICE_UNAVAILABLE, "Apple 인증 설정을 확인할 수 없습니다."),
+  APPLE_TOKEN_REVOCATION_FAILED(HttpStatus.BAD_GATEWAY, "Apple 인증 연결을 해제하지 못했습니다."),
   INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "리프레시 토큰이 유효하지 않거나 만료되었습니다. 다시 로그인해 주세요."),
 
   // 사용자

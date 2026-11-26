@@ -49,4 +49,21 @@ public class UserService {
         .build());
   }
 
+  @Transactional
+  public Optional<User> findAppleUserForLogin(String providerId, String name, String encryptedRefreshToken) {
+    return userRepository.findProviderUserForUpdate(User.Provider.APPLE, providerId)
+        .map(user -> {
+          user.updateAppleCredentials(name, encryptedRefreshToken);
+          return user;
+        });
+  }
+
+  @Transactional
+  public User createAppleUser(String providerId, String name, String encryptedRefreshToken) {
+    String nickname = name == null || name.isBlank() ? "애플사용자" : name.trim();
+    User user = User.builder().provider(User.Provider.APPLE).providerId(providerId).name(nickname).build();
+    user.updateAppleCredentials(null, encryptedRefreshToken);
+    return userRepository.saveAndFlush(user);
+  }
+
 }
