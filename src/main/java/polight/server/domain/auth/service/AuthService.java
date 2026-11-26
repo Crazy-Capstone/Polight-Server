@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import polight.server.domain.auth.client.KakaoOAuthClient;
+import polight.server.domain.auth.client.AppleOAuthClient;
+import polight.server.domain.auth.dto.AppleLoginRequest;
 import polight.server.domain.auth.dto.AuthTokenResponse;
 import polight.server.domain.auth.dto.kakao.KakaoUserInfoResponse;
 import polight.server.domain.user.entity.User;
@@ -21,6 +23,40 @@ public class AuthService {
   private final JwtTokenProvider jwtTokenProvider;
   private final KakaoOAuthClient kakaoOAuthClient;
   private final RefreshTokenStore refreshTokenStore;
+  private final AppleIdentityTokenVerifier appleIdentityTokenVerifier;
+  private final AppleOAuthClient appleOAuthClient;
+  private final AppleTokenCipher appleTokenCipher;
+
+  public AuthTokenResponse loginWithApple(AppleLoginRequest request) {
+    String subject = appleIdentityTokenVerifier.verify(request.identityToken(), request.nonce());
+    appleTokenCipher.validateConfiguration();
+    var tokens = appleOAuthClient.exchangeCode(request.authorizationCode());
+    if (tokens.identityToken() == null || tokens.identityToken().isBlank()) {
+      throw new BaseException(ErrorCode.APPLE_TOKEN_EXCHANGE_FAILED);
+    }
+    String exchangedSubject = appleIdentityTokenVerifier.verify(tokens.identityToken(), request.nonce());
+    if (!subject.equals(exchangedSubject)) {
+      throw new BaseException(ErrorCode.APPLE_IDENTITY_TOKEN_INVALID);
+    }
+    String encryptedToken = tokens.refreshToken() == null || tokens.refreshToken().isBlank()
+        ? null : appleTokenCipher.encrypt(tokens.refreshToken(), subject);
+    User user = userService.findAppleUserForLogin(subject, request.name(), encryptedToken)
+        .orElseGet(() -> {
+          if (encryptedToken == null) {
+            throw new BaseException(ErrorCode.APPLE_TOKEN_EXCHANGE_FAILED);
+          }
+          try {
+            return userService.createAppleUser(subject, request.name(), encryptedToken);
+          } catch (DataIntegrityViolationException exception) {
+            return userService.findAppleUserForLogin(subject, request.name(), encryptedToken)
+                .orElseThrow(() -> exception);
+          }
+        });
+    if (user.getAppleRefreshTokenEncrypted() == null) {
+      throw new BaseException(ErrorCode.APPLE_TOKEN_EXCHANGE_FAILED);
+    }
+    return issueTokens(user, null);
+  }
 
   public AuthTokenResponse loginWithKakao(String authorizationCode) {
     var tokenResponse = kakaoOAuthClient.requestToken(authorizationCode);

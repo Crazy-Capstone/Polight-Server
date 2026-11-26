@@ -6,6 +6,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import polight.server.domain.auth.service.RefreshTokenStore;
+import polight.server.domain.auth.event.AppleTokenRevocationRequestedEvent;
+import polight.server.domain.user.entity.User;
 import polight.server.domain.insurance.event.DocumentDeletionRequestedEvent;
 import polight.server.domain.insurance.entity.PolicyDocument;
 import polight.server.domain.insurance.repository.PolicyDocumentRepository;
@@ -29,7 +31,7 @@ public class UserWithdrawalService {
     if (userId == null) {
       throw new BaseException(ErrorCode.AUTHENTICATION_REQUIRED);
     }
-    userRepository.findByIdForWithdrawal(userId)
+    User user = userRepository.findByIdForWithdrawal(userId)
         .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
 
     var filePaths = policyDocumentRepository.findByUserId(userId).stream()
@@ -39,6 +41,10 @@ public class UserWithdrawalService {
     // Redis failure aborts withdrawal; already revoked sessions are harmless on rollback.
     refreshTokenStore.revokeAll(userId);
     userWithdrawalRepository.deleteUserData(userId);
+    if (user.getProvider() == User.Provider.APPLE && user.getAppleRefreshTokenEncrypted() != null) {
+      eventPublisher.publishEvent(new AppleTokenRevocationRequestedEvent(
+          userId, user.getProviderId(), user.getAppleRefreshTokenEncrypted()));
+    }
     eventPublisher.publishEvent(new DocumentDeletionRequestedEvent(filePaths));
   }
 }
