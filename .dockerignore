@@ -5,6 +5,8 @@ build
 .idea
 *.iml
 .env
+*.p8
+**/*.p8
 docker-compose.yml
 HELP.md
 README.md

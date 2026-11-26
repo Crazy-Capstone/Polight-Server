@@ -51,7 +51,7 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(HttpMessageNotReadableException.class)
   public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(
       HttpMessageNotReadableException e) {
-    log.warn("요청 본문을 읽을 수 없습니다: {}", e.getMostSpecificCause().getMessage());
+    log.warn("요청 본문을 읽을 수 없습니다.");
 
     return ResponseEntity.status(ErrorCode.INVALID_INPUT.getStatus())
         .body(ErrorResponse.of(ErrorCode.INVALID_INPUT));

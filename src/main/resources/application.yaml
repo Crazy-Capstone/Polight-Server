@@ -92,6 +92,17 @@ cors:
 
 
 oauth:
+  apple:
+    client-id: ${APPLE_CLIENT_ID:com.polight.app}
+    team-id: ${APPLE_TEAM_ID:}
+    key-id: ${APPLE_KEY_ID:}
+    private-key-path: ${APPLE_PRIVATE_KEY_PATH:}
+    token-encryption-key: ${APPLE_TOKEN_ENCRYPTION_KEY:}
+    jwks-uri: https://appleid.apple.com/auth/keys
+    token-uri: https://appleid.apple.com/auth/token
+    revoke-uri: https://appleid.apple.com/auth/revoke
+    connect-timeout: 3s
+    read-timeout: 5s
   kakao:
     client-id: ${KAKAO_REST_API_KEY}
     redirect-uri: ${KAKAO_REDIRECT_URI}
