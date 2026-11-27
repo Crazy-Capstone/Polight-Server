@@ -3,17 +3,21 @@ package polight.server.domain.analysis;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,11 +28,13 @@ import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import polight.server.domain.analysis.entity.AnalysisResult;
+import polight.server.domain.analysis.entity.AnalysisStatus;
 import polight.server.domain.analysis.entity.CoverageItem;
 import polight.server.domain.analysis.entity.PaymentType;
 import polight.server.domain.analysis.repository.AnalysisResultRepository;
 import polight.server.domain.analysis.repository.CoverageItemRepository;
 import polight.server.domain.insurance.entity.DocumentKind;
+import polight.server.domain.insurance.entity.DocumentParseStatus;
 import polight.server.domain.insurance.entity.PolicyDocument;
 import polight.server.domain.insurance.repository.PolicyDocumentRepository;
 import polight.server.domain.terms.entity.CoverageDetailItem;
@@ -106,6 +112,7 @@ class CoverageDetailHttpTest {
 
   @ParameterizedTest
   @EnumSource(PaymentType.class)
+  @DisplayName("지급 유형을 콜백으로 수신하면 금액·통화·약관 조건을 유지한 채 저장하고 조회한다")
   void receivesPersistsAndReturnsAllPaymentTypesWithoutChangingAmounts(PaymentType paymentType)
       throws Exception {
     PolicyTermsCoverage rule = rule("Treatment during insured trip");
@@ -129,6 +136,7 @@ class CoverageDetailHttpTest {
 
   @ParameterizedTest
   @ValueSource(strings = {"omitted", "null", "", "UNKNOWN", "FUTURE_PAYMENT_TYPE", "fixed"})
+  @DisplayName("지급 유형이 없거나 미분류 값이어도 기존 콜백은 수신하고 지급 유형만 null로 둔다")
   void oldNullEmptyAndUnclassifiedCallbacksRemainCompatible(String value) throws Exception {
     rule(null);
     var body = callback();
@@ -152,6 +160,7 @@ class CoverageDetailHttpTest {
   }
 
   @Test
+  @DisplayName("연결된 약관 규칙이 없으면 증권의 가입 금액을 유지하고 약관 조건은 비워 반환한다")
   void returnsNullKeyConditionWhenNoRuleIsLinked() throws Exception {
     complete(callback());
 
@@ -163,6 +172,7 @@ class CoverageDetailHttpTest {
   }
 
   @Test
+  @DisplayName("같은 콜백을 재수신해도 담보는 중복되지 않고 공용 약관 규칙과 근거는 유지한다")
   void repeatedCallbacksKeepTermsRulesChildrenAndExclusionSummaryUnchanged() throws Exception {
     PolicyTermsCoverage rule = rule("Original key condition");
     var exclusion = exclusions.saveAndFlush(ExclusionCondition.builder().termsCoverage(rule)
@@ -211,7 +221,95 @@ class CoverageDetailHttpTest {
     assertThat(items.findByAnalysisResultIdOrderBySortOrderAsc(analysis.getId())).hasSize(1);
   }
 
+  @ParameterizedTest
+  @CsvSource({"COVERED,true", "PARTIALLY_COVERED,true", "NOT_COVERED,false", "EXCLUDED,false"})
+  @DisplayName("부분 보장을 포함한 보장 상태를 수신하면 가입 여부를 올바르게 저장하고 반환한다")
+  void derivesCoveredFlagFromCoverageStatus(String coverageStatus, boolean covered) throws Exception {
+    var body = callback();
+    ((ObjectNode) body.path("coverageItems").get(0)).put("coverageStatus", coverageStatus);
+
+    complete(body);
+
+    var saved = items.findByAnalysisResultIdOrderBySortOrderAsc(analysis.getId());
+    assertThat(saved).singleElement().satisfies(item -> {
+      assertThat(item.getCoverageStatus().name()).isEqualTo(coverageStatus);
+      assertThat(item.isCovered()).isEqualTo(covered);
+    });
+    var response = coverage();
+    assertThat(response.path("coverageStatus").asText()).isEqualTo(coverageStatus);
+    assertThat(response.path("isCovered").asBoolean()).isEqualTo(covered);
+  }
+
+  @ParameterizedTest(name = "잘못된 두 번째 담보: {0}")
+  @ValueSource(strings = {"missing-title", "blank-title", "invalid-status"})
+  @DisplayName("재수신한 콜백의 뒤쪽 담보가 잘못되면 기존 담보 삭제와 앞쪽 담보 저장을 모두 롤백한다")
+  void invalidLaterCoverageRollsBackReplacementAndPreservesPreviousResult(String problem) throws Exception {
+    complete(callback());
+    var before = analyses.findById(analysis.getId()).orElseThrow();
+    var previousItem = items.findByAnalysisResultIdOrderBySortOrderAsc(analysis.getId()).get(0);
+    var body = callback().put("summary", "Must not replace the previous summary");
+    var replacement = (ObjectNode) body.path("coverageItems").get(0);
+    replacement.put("title", "Replacement coverage").put("limitAmount", 9999);
+    var invalid = replacement.deepCopy();
+    switch (problem) {
+      case "missing-title" -> invalid.remove("title");
+      case "blank-title" -> invalid.put("title", "   ");
+      case "invalid-status" -> invalid.put("coverageStatus", "UNSUPPORTED_STATUS");
+      default -> throw new IllegalArgumentException(problem);
+    }
+    ((ArrayNode) body.path("coverageItems")).add(invalid);
+
+    mvc.perform(post(callbackEndpoint()).header("X-Internal-Api-Key", "coverage-test-internal-key")
+            .contentType(MediaType.APPLICATION_JSON).content(body.toString()))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+    var after = analyses.findById(analysis.getId()).orElseThrow();
+    assertThat(after.getStatus()).isEqualTo(AnalysisStatus.COMPLETED);
+    assertThat(after.getSummary()).isEqualTo(before.getSummary());
+    assertThat(after.getRawResultJson()).isEqualTo(before.getRawResultJson());
+    assertThat(after.getCompletedAt()).isEqualTo(before.getCompletedAt());
+    assertThat(after.getUpdatedAt()).isEqualTo(before.getUpdatedAt());
+    assertThat(items.findByAnalysisResultIdOrderBySortOrderAsc(analysis.getId()))
+        .singleElement().satisfies(item -> {
+          assertThat(item.getId()).isEqualTo(previousItem.getId());
+          assertThat(item.getTitle()).isEqualTo("Medical expense");
+          assertThat(item.getLimitAmount()).isEqualTo(3000L);
+        });
+    assertThat(documents.findById(document.getId()).orElseThrow().getParseStatus())
+        .isEqualTo(DocumentParseStatus.COMPLETED);
+  }
+
   @Test
+  @DisplayName("실패 콜백은 분석과 문서를 실패로 표시하고 이미 저장된 담보는 보존한다")
+  void failureCallbackPreservesExistingCoveragesAndMarksDocumentFailed() throws Exception {
+    complete(callback());
+    var previousItem = items.findByAnalysisResultIdOrderBySortOrderAsc(analysis.getId()).get(0);
+    var failure = mapper.createObjectNode().put("errorMessage", "AI indexing failed");
+
+    mvc.perform(post(callbackEndpoint().replace("/complete", "/fail"))
+            .header("X-Internal-Api-Key", "coverage-test-internal-key")
+            .contentType(MediaType.APPLICATION_JSON).content(failure.toString()))
+        .andExpect(status().isNoContent());
+
+    var failed = analyses.findById(analysis.getId()).orElseThrow();
+    assertThat(failed.getStatus()).isEqualTo(AnalysisStatus.FAILED);
+    assertThat(failed.getFailureReason()).isEqualTo("AI indexing failed");
+    assertThat(failed.getCompletedAt()).isNotNull();
+    assertThat(documents.findById(document.getId()).orElseThrow().getParseStatus())
+        .isEqualTo(DocumentParseStatus.FAILED);
+    assertThat(items.findByAnalysisResultIdOrderBySortOrderAsc(analysis.getId()))
+        .extracting(CoverageItem::getId).containsExactly(previousItem.getId());
+    mvc.perform(get(coverageEndpoint())
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokens.createAccessToken(owner)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("FAILED"))
+        .andExpect(jsonPath("$.coverages").isEmpty())
+        .andExpect(jsonPath("$.selectedConcerns").isEmpty());
+  }
+
+  @Test
+  @DisplayName("콜백은 내부 인증 키를 요구하고 보장 내역은 문서 소유자에게만 반환한다")
   void existingCallbackAndCoverageSecurityPoliciesRemainInEffect() throws Exception {
     mvc.perform(post(callbackEndpoint()).contentType(MediaType.APPLICATION_JSON)
         .content(callback().toString())).andExpect(status().isUnauthorized());
@@ -225,6 +323,7 @@ class CoverageDetailHttpTest {
   }
 
   @Test
+  @DisplayName("보장 조회 문서는 지급 유형을 공개하고 내부 콜백 경로는 숨긴다")
   void swaggerDescribesNewFieldsAndRetainsHiddenInternalCallback() throws Exception {
     var result = mvc.perform(get("/v3/api-docs")).andExpect(status().isOk()).andReturn();
     JsonNode docs = mapper.readTree(result.getResponse().getContentAsString());

@@ -9,6 +9,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -147,6 +149,37 @@ class LocalTermsMatcherTest {
 
     assertThat(match.stage()).isEqualTo(TermsMatchStage.REVISION);
     assertThat(match.terms()).isSameAs(january);
+  }
+
+  @ParameterizedTest(name = "보험 시작일 {0}, 신규 개정판 적용 {1}")
+  @CsvSource({"2026-06-30,false", "2026-07-01,true", "2026-07-02,true"})
+  void 개정_시행일_당일부터_새_약관을_적용한다(LocalDate insuranceStartDate, boolean usesNewRevision) {
+    PolicyTerms january = verified("삼성화재", "해외여행보험", "2026.01", LocalDate.of(2026, 1, 1));
+    PolicyTerms july = verified("삼성화재", "해외여행보험", "2026.07", LocalDate.of(2026, 7, 1));
+    // 저장소의 반환 순서와 관계없이 보험 시작일에 유효한 가장 최근 개정판을 골라야 한다.
+    givenUsableTerms(july, january);
+    AnalysisResult analysis = analysis(DocumentKind.CERTIFICATE, "삼성화재", "해외여행보험",
+        LocalDate.of(2026, 8, 10), insuranceStartDate);
+
+    TermsMatch match = matcher.match(analysis);
+
+    assertThat(match.stage()).isEqualTo(TermsMatchStage.REVISION);
+    assertThat(match.terms()).isSameAs(usesNewRevision ? july : january);
+  }
+
+  @Test
+  void 개정일을_모르는_후보가_섞여_있어도_날짜가_확인된_유효_개정판을_고른다() {
+    PolicyTerms applicable = verified("삼성화재", "해외여행보험", "2026.01", LocalDate.of(2026, 1, 1));
+    givenUsableTerms(
+        verified("삼성화재", "해외여행보험", "개정일 미상", null),
+        verified("삼성화재", "해외여행보험", "2026.07", LocalDate.of(2026, 7, 1)),
+        applicable);
+
+    TermsMatch match = matcher.match(
+        analysis(DocumentKind.CERTIFICATE, "삼성화재", "해외여행보험", null, LocalDate.of(2026, 3, 1)));
+
+    assertThat(match.stage()).isEqualTo(TermsMatchStage.REVISION);
+    assertThat(match.terms()).isSameAs(applicable);
   }
 
   @Test
